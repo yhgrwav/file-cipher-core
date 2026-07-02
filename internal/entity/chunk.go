@@ -1,6 +1,10 @@
 package entity
 
-import "github.com/google/uuid"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 // Version - способ реализации согласованности между двумя независимыми инстансами БД.
 // Пример проблемы:
@@ -34,7 +38,8 @@ type ChunkData struct {
 }
 
 type ChunkKey struct {
-	UUID    uuid.UUID
-	Key     []byte
-	Version int
+	UUID      uuid.UUID
+	Key       []byte
+	Version   int
+	CreatedAt time.Time
 }
