@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS cipher.chunk_keys;
+DROP SCHEMA IF EXISTS cipher;
