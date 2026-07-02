@@ -35,6 +35,7 @@ type ChunkData struct {
 	Ciphertext []byte
 	Nonce      []byte
 	Version    int
+	CreatedAt  time.Time
 }
 
 type ChunkKey struct {
