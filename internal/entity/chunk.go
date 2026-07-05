@@ -32,6 +32,7 @@ import (
 
 type ChunkData struct {
 	UUID       uuid.UUID
+	FileID     uuid.UUID
 	Ciphertext []byte
 	Nonce      []byte
 	Version    int
