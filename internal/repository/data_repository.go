@@ -21,12 +21,12 @@ func NewDataRepository(db *pgxpool.Pool, logger *zap.Logger) *DataRepository {
 
 var (
 	dataTableInfo = pgx.Identifier{"cipher", "chunk_data"}
-	dataColumns   = []string{"uuid", "version", "ciphertext", "nonce", "created_at"}
+	dataColumns   = []string{"uuid", "version", "ciphertext", "nonce", "created_at", "file_id"}
 )
 
 // GetLatestData возвращает по одной (самой свежей) записи чанка на каждый uuid из батча.
 func (r *DataRepository) GetLatestData(ctx context.Context, ids []uuid.UUID) ([]entity.ChunkData, error) {
-	query := `SELECT DISTINCT ON (uuid) uuid, version, ciphertext, nonce
+	query := `SELECT DISTINCT ON (uuid) uuid, version, ciphertext, nonce, file_id
 			  FROM cipher.chunk_data
               WHERE uuid = ANY($1)
               ORDER BY uuid, version DESC`
@@ -41,7 +41,7 @@ func (r *DataRepository) GetLatestData(ctx context.Context, ids []uuid.UUID) ([]
 	var result []entity.ChunkData
 	for rows.Next() {
 		var d entity.ChunkData
-		if err := rows.Scan(&d.UUID, &d.Version, &d.Ciphertext, &d.Nonce); err != nil {
+		if err := rows.Scan(&d.UUID, &d.Version, &d.Ciphertext, &d.Nonce, &d.FileID); err != nil {
 			r.logger.Error("error scanning data row", zap.Error(err))
 			return nil, err
 		}
@@ -71,7 +71,7 @@ func (r *DataRepository) SaveData(ctx context.Context, data []entity.ChunkData) 
 func dataRowsHelper(data []entity.ChunkData) [][]any {
 	rows := make([][]any, 0, len(data))
 	for _, value := range data {
-		rows = append(rows, []any{value.UUID, value.Version, value.Ciphertext, value.Nonce, value.CreatedAt})
+		rows = append(rows, []any{value.UUID, value.Version, value.Ciphertext, value.Nonce, value.CreatedAt, value.FileID})
 	}
 	return rows
 }
