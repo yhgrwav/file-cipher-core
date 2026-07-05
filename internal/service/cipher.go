@@ -18,6 +18,8 @@ func GenerateKey() ([]byte, error) {
 	if _, err := rand.Read(key); err != nil {
 		return nil, err
 	}
+	return key, nil
+}
 
 	// 2. Вызывается обёртка GCM с гарантиями
 	gcm, err := cipher.NewGCM(block)
