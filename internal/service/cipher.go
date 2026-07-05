@@ -6,6 +6,13 @@ import (
 	"crypto/rand"
 )
 
+// KeySize - размер ключа AES-256 в байтах (256 бит).
+const KeySize = 32
+
+// ErrShortCiphertext возвращается, когда на расшифровку пришло меньше данных, чем занимает тег аутентификации GCM.
+var ErrShortCiphertext = errors.New("ciphertext is too short")
+
+// GenerateKey генерирует случайный AES-256 ключ
 func GenerateKey() ([]byte, error) {
 	key := make([]byte, 32)  // 32 потому что AES-256 требует именно 32 байта
 	_, err := rand.Read(key) // заполняем байты рандомными значениями
