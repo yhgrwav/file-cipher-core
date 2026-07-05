@@ -4,6 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"errors"
 )
 
 // KeySize - размер ключа AES-256 в байтах (256 бит).
@@ -21,41 +22,43 @@ func GenerateKey() ([]byte, error) {
 	return key, nil
 }
 
-	// 2. Вызывается обёртка GCM с гарантиями
-	gcm, err := cipher.NewGCM(block)
+// Encrypt шифрует plaintext ключом в режиме AES-256-GCM и возвращает ciphertext
+// вместе со сгенерированным nonce. Nonce не секретен и хранится рядом с ciphertext
+// (в нашем случае - отдельной колонкой в БД2), но обязан быть уникальным для каждого
+// (ключ, plaintext), поэтому генерируется заново на каждый вызов.
+func Encrypt(key, plaintext []byte) (ciphertext, nonce []byte, err error) {
+	gcm, err := newGCM(key)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	nonce = make([]byte, gcm.NonceSize()) // обычно 12 байт
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, nil, err
+	}
+
+	// Seal(nil, ...) => возвращает только ciphertext (с тегом аутентификации внутри),
+	// nonce отдаём отдельно, чтобы явно положить его в свою колонку.
+	return gcm.Seal(nil, nonce, plaintext, nil), nonce, nil
+}
+
+// Decrypt расшифровывает ciphertext ключом и nonce, которыми он был зашифрован.
+func Decrypt(key, ciphertext, nonce []byte) ([]byte, error) {
+	gcm, err := newGCM(key)
 	if err != nil {
 		return nil, err
 	}
-
-	//                                 1,2,3,4,5,6,7,8,9,10,11,12 (12 байт)
-	// 3. выделяется память под nonce [0,0,0,0,0,0,0,0,0,0,0,0]
-	nonce := make([]byte, gcm.NonceSize())
-
-	// 4. nonce заполняется рандомными байтами
-	if _, err = rand.Read(nonce); err != nil {
-		return nil, err
+	if len(ciphertext) < gcm.Overhead() {
+		return nil, ErrShortCiphertext
 	}
-
-	// 5. теперь у нас есть ключ, nonce, а сверху мы получили данные, соответственно нужно
-	// зашифровать данные и получить результат, который мы возвращаем
-	return gcm.Seal(nil, nonce, data, nil), nil
-	// вроде как в аргумент dst можно было передать nonce и не создавать отдельное поле в базе, но насколько я понял
-	// такой подход тяжело читать и дебажить
+	return gcm.Open(nil, nonce, ciphertext, nil)
 }
 
-// Decrypt будет расшифровывать слайс данных по ключу
-// логика выполнения практически такая же, как у Encrypt
-func Decrypt(key []byte, data []byte) ([]byte, error) {
-	// 1. Создаём блок для AES шифра
+// хелпер для GCM, в который вынесен дублирующийся код
+func newGCM(key []byte) (cipher.AEAD, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
 	}
-	// 2. Указываем метод работы с блоком
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-	// 3. Вместо Seal(шифрования) возвращаем Open(расшифровку)
-	return gcm.Open(nil, data, nil, nil)
+	return cipher.NewGCM(block)
 }
