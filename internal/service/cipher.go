@@ -14,28 +14,8 @@ var ErrShortCiphertext = errors.New("ciphertext is too short")
 
 // GenerateKey генерирует случайный AES-256 ключ
 func GenerateKey() ([]byte, error) {
-	key := make([]byte, 32)  // 32 потому что AES-256 требует именно 32 байта
-	_, err := rand.Read(key) // заполняем байты рандомными значениями
-	if err != nil {
-		return []byte{}, err
-	}
-	return key, nil // и возвращаем ключ
-}
-
-// Encrypt будет шифровать какой-то кусочек (в случае ТЗ - 50 кб) данных
-func Encrypt(key []byte, data []byte) ([]byte, error) {
-	// Существует несколько сущностей, с которыми нужно будет работать:
-	// 1. Cipher - шифровщик
-	// 2. Block - это сущность, которая резервирует, а затем и заполняет
-	// 3. GCM - обёртка, умеющая работать с нашим шифровщиком(AES-256), гарантируя целостность данных
-	// 4. Nonce - уникальный идентификатор, часть шифра данных в блоке
-	//
-	// Логика должна быть такая:
-	// Придумал nonce -> nonce + "*[]byte*" + key -> cipher -> hj3905j3h3 + tag = блок(чанк) ~50 байт
-
-	// 1. Создаётся блок (чанк)
-	block, err := aes.NewCipher(key)
-	if err != nil {
+	key := make([]byte, KeySize) // 32 байта, потому что AES-256 требует именно 32 байта
+	if _, err := rand.Read(key); err != nil {
 		return nil, err
 	}
 
