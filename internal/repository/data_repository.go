@@ -55,6 +55,40 @@ func (r *DataRepository) GetLatestData(ctx context.Context, ids []uuid.UUID) ([]
 	return result, nil
 }
 
+// GetChunkUUIDsByFileID возвращает слайс айди чанков с пагинацией. Такой подход нужен, чтобы выстроить обратный стриминг
+// данных юзеру, но при этом не забивать всю память сервера/тестовой машины данными, а постепенно отдавать куски информации.
+// afterUUID - параметр пагинации.
+func (r *DataRepository) GetChunkUUIDsByFileID(ctx context.Context, fileID uuid.UUID, afterUUID uuid.UUID, limit int) ([]uuid.UUID, error) {
+	query := `SELECT DISTINCT uuid
+			  FROM cipher.chunk_data
+              WHERE file_id = $1 AND uuid > $2
+              ORDER BY uuid ASC
+              LIMIT $3`
+
+	rows, err := r.db.Query(ctx, query, fileID, afterUUID, limit)
+	if err != nil {
+		r.logger.Error("error getting chunk uuids by file id", zap.String("file_id", fileID.String()), zap.Error(err))
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			r.logger.Error("error scanning chunk uuid row", zap.Error(err))
+			return nil, err
+		}
+		result = append(result, id)
+	}
+	if err := rows.Err(); err != nil {
+		r.logger.Error("error iterating chunk uuid rows", zap.Error(err))
+		return nil, err
+	}
+
+	return result, nil
+}
+
 // SaveData - батчевая вставка новых версий зашифрованных чанков.
 func (r *DataRepository) SaveData(ctx context.Context, data []entity.ChunkData) error {
 	_, err := r.db.CopyFrom(ctx, dataTableInfo, dataColumns,
