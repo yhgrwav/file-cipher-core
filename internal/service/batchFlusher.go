@@ -10,6 +10,15 @@ import (
 	"go.uber.org/zap"
 )
 
+type (
+	keyWriter interface {
+		SaveKeys(ctx context.Context, keys []entity.ChunkKey) error
+	}
+	dataWriter interface {
+		SaveData(ctx context.Context, data []entity.ChunkData) error
+	}
+)
+
 // FlushItem - результат работы воркера: одна пара (ключ в БД1, шифртекст в БД2)
 // для одного чанка. Flusher копит такие пары и пишет их в базы пачками.
 type FlushItem struct {
@@ -21,15 +30,15 @@ type FlushItem struct {
 // принудительно опустошается, отгружая все данные в БД, если поток данных маленький, но всё же есть - срабатывает flushTime,
 // который по определённому кулдауну вызывает flush. в зависимости передаётся оба репозитория и логгер, ничего необычного.
 type Flusher struct {
-	keyRepo              KeyStorage
-	dataRepo             DataStorage
+	keyRepo              keyWriter
+	dataRepo             dataWriter
 	logger               *zap.Logger
 	batchSize            int
 	flushTime            time.Duration
 	shutdownFlushTimeout time.Duration
 }
 
-func NewFlusher(keyRepo KeyStorage, dataRepo DataStorage, logger *zap.Logger, batchSize int, flushTime time.Duration, shutdownFlushTimeout time.Duration) *Flusher {
+func NewFlusher(keyRepo keyWriter, dataRepo dataWriter, logger *zap.Logger, batchSize int, flushTime time.Duration, shutdownFlushTimeout time.Duration) *Flusher {
 	return &Flusher{
 		keyRepo:              keyRepo,
 		dataRepo:             dataRepo,
