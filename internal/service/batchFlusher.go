@@ -71,7 +71,7 @@ func (f *Flusher) Run(ctx context.Context, in <-chan FlushItem) error {
 	data := make([]entity.ChunkData, 0, f.batchSize)
 
 	// 2. инициализируется таймер с заданным в конфиге параметром
-	timer := time.NewTimer(f.flushTime)
+	timer := time.NewTimer(f.cfg.FlushTime)
 	defer timer.Stop()
 
 	// flush - функция-переменная, которая проверяет есть ли данные и если есть - отправляет, обрабатывает ошибку и обнуляет батч
@@ -90,13 +90,13 @@ func (f *Flusher) Run(ctx context.Context, in <-chan FlushItem) error {
 	for {
 		select {
 		case <-ctx.Done():
+			// дозаписывается всё, что уже есть в data батче
 			if len(data) > 0 {
-				flushCtx, cancel := context.WithTimeout(context.Background(), f.shutdownFlushTimeout)
+				flushCtx, cancel := context.WithTimeout(context.Background(), f.cfg.ShutdownFlushTimeout)
 				err := f.write(flushCtx, keys, data)
 				cancel()
 				if err != nil {
-					f.logger.Error("flush tail on shutdown failed",
-						zap.Int("lost", len(data)), zap.Error(err))
+					f.logger.Error("flush tail on shutdown failed", zap.Int("lost", len(data)), zap.Error(err))
 				}
 			}
 			f.logger.Info("Flusher worker done")
@@ -110,19 +110,19 @@ func (f *Flusher) Run(ctx context.Context, in <-chan FlushItem) error {
 			// если всё ок - добавляем в батчи полученные данные.
 			keys = append(keys, v.Key)
 			data = append(data, v.Data)
-			if len(data) >= f.batchSize {
+			if len(data) >= f.cfg.BatchSize {
 				// если полученные данные больше, чем батч - освобождаем батч
 				if err := flush(); err != nil {
 					return err
 				}
-				resetTimer(timer, f.flushTime)
+				resetTimer(timer, f.cfg.FlushTime)
 			}
 
 		case <-timer.C:
 			if err := flush(); err != nil {
 				return err
 			}
-			timer.Reset(f.flushTime)
+			timer.Reset(f.cfg.FlushTime)
 		}
 	}
 }
