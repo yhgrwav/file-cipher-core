@@ -127,16 +127,42 @@ func (f *Flusher) Run(ctx context.Context, in <-chan FlushItem) error {
 	}
 }
 
-// write кладёт пачку в обе базы: сначала данные, затем ключи. Порядок важен из-за инварианта версий
+// write кладёт пачку в обе базы.
 func (f *Flusher) write(ctx context.Context, keys []entity.ChunkKey, data []entity.ChunkData) error {
-	if err := f.dataRepo.SaveData(ctx, data); err != nil {
+	if err := f.withRetry(ctx, func() error {
+		return f.dataRepo.SaveData(ctx, data)
+	}); err != nil {
 		return fmt.Errorf("flush data batch (%d): %w", len(data), err)
 	}
-	if err := f.keyRepo.SaveKeys(ctx, keys); err != nil {
+	if err := f.withRetry(ctx, func() error {
+		return f.keyRepo.SaveKeys(ctx, keys)
+	}); err != nil {
 		return fmt.Errorf("flush key batch (%d): %w", len(keys), err)
 	}
 	f.logger.Debug("batch flushed", zap.Int("count", len(data)))
 	return nil
+}
+
+// withRetry реализует линейный бэкофф
+func (f *Flusher) withRetry(ctx context.Context, writeBatch func() error) error {
+	var lastErr error
+	for attempt := 0; attempt <= f.cfg.WriteRetries; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return lastErr
+			case <-time.After(f.cfg.WriteRetryBackoff):
+			}
+		}
+		lastErr = writeBatch()
+		if lastErr == nil {
+			return nil
+		}
+		if ctx.Err() != nil {
+			return lastErr
+		}
+	}
+	return fmt.Errorf("write failed after %d retries: %w", f.cfg.WriteRetries+1, lastErr)
 }
 
 // хелпер для ресета таймера
