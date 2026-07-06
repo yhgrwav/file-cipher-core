@@ -67,8 +67,8 @@ func NewFlusher(keyRepo keyWriter, dataRepo dataWriter, logger *zap.Logger, cfg 
 // дописывает остаток и возвращает nil.
 func (f *Flusher) Run(ctx context.Context, in <-chan FlushItem) error {
 	// 1. создаётся два батча для двух БД
-	keys := make([]entity.ChunkKey, 0, f.batchSize)
-	data := make([]entity.ChunkData, 0, f.batchSize)
+	keys := make([]entity.ChunkKey, 0, f.cfg.BatchSize)
+	data := make([]entity.ChunkData, 0, f.cfg.BatchSize)
 
 	// 2. инициализируется таймер с заданным в конфиге параметром
 	timer := time.NewTimer(f.cfg.FlushTime)
