@@ -26,26 +26,39 @@ type FlushItem struct {
 	Data entity.ChunkData
 }
 
-// Flusher решает проблему записи данных в базу, базовый паттерн, задаётся batchSize и flushTime -> если батч переполнился -
-// принудительно опустошается, отгружая все данные в БД, если поток данных маленький, но всё же есть - срабатывает flushTime,
-// который по определённому кулдауну вызывает flush. в зависимости передаётся оба репозитория и логгер, ничего необычного.
-type Flusher struct {
-	keyRepo              keyWriter
-	dataRepo             dataWriter
-	logger               *zap.Logger
-	batchSize            int
-	flushTime            time.Duration
-	shutdownFlushTimeout time.Duration
+type FlusherConfig struct {
+	// BatchSize - при скольких накопленных парах батч пишется в БД принудительно
+	BatchSize int
+
+	// FlushTime - максимальное время, которое пара ждёт в батче при слабом потоке данных
+	FlushTime time.Duration
+
+	// ShutdownFlushTimeout - таймаут на дозапись данных при отмене контекста
+	ShutdownFlushTimeout time.Duration
+
+	// WriteRetries - сколько раз повторить запись батча при ошибке БД
+	WriteRetries int
+
+	// WriteRetryBackoff - базовая пауза между повторами
+	WriteRetryBackoff time.Duration
 }
 
-func NewFlusher(keyRepo keyWriter, dataRepo dataWriter, logger *zap.Logger, batchSize int, flushTime time.Duration, shutdownFlushTimeout time.Duration) *Flusher {
+// Flusher решает проблему записи данных в базу, базовый паттерн, задаётся BatchSize и FlushTime -> если батч переполнился -
+// принудительно опустошается, отгружая все данные в БД, если поток данных маленький, но всё же есть - срабатывает FlushTime,
+// который по определённому кулдауну вызывает flush. в зависимости передаётся оба репозитория и логгер, ничего необычного.
+type Flusher struct {
+	keyRepo  keyWriter
+	dataRepo dataWriter
+	logger   *zap.Logger
+	cfg      FlusherConfig
+}
+
+func NewFlusher(keyRepo keyWriter, dataRepo dataWriter, logger *zap.Logger, cfg FlusherConfig) *Flusher {
 	return &Flusher{
-		keyRepo:              keyRepo,
-		dataRepo:             dataRepo,
-		logger:               logger,
-		batchSize:            batchSize,
-		flushTime:            flushTime,
-		shutdownFlushTimeout: shutdownFlushTimeout,
+		keyRepo:  keyRepo,
+		dataRepo: dataRepo,
+		logger:   logger,
+		cfg:      cfg,
 	}
 }
 
