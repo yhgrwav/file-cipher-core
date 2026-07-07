@@ -24,7 +24,7 @@ var (
 	keysTableInfo = pgx.Identifier{"cipher", "chunk_keys"}
 )
 
-// GetLatestKeys возвращает по одной (самой свежей) записи ключа на каждый uuid из батча.
+// GetLatestKeys возвращает по одной (самой свежей) записи ключа на каждый uuid из чанка.
 func (r *KeyRepository) GetLatestKeys(ctx context.Context, ids []uuid.UUID) ([]entity.ChunkKey, error) {
 	// логика запроса:
 	// выбирает поля с помощью DISTINCT ON (uuid)
