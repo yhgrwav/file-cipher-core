@@ -89,7 +89,6 @@ func (r *Rotator) Run(ctx context.Context, fileID uuid.UUID) error {
 	})
 
 	if err := g.Wait(); err != nil {
-		r.logger.Error("rotation failed", zap.String("file_id", fileID.String()), zap.Error(err))
 		return err
 	}
 

@@ -67,7 +67,6 @@ func (c *Cipher) EncryptFile(ctx context.Context, fileID uuid.UUID, src io.Reade
 	})
 
 	if err := g.Wait(); err != nil {
-		c.logger.Error("encrypt file failed", zap.String("file_id", fileID.String()), zap.Error(err))
 		return err
 	}
 

@@ -7,16 +7,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"go.uber.org/zap"
 )
 
 type KeyRepository struct {
-	db     *pgxpool.Pool
-	logger *zap.Logger
+	db *pgxpool.Pool
 }
 
-func NewKeyRepository(db *pgxpool.Pool, logger *zap.Logger) *KeyRepository {
-	return &KeyRepository{db: db, logger: logger}
+func NewKeyRepository(db *pgxpool.Pool) *KeyRepository {
+	return &KeyRepository{db: db}
 }
 
 var (
@@ -37,7 +35,6 @@ func (r *KeyRepository) GetLatestKeys(ctx context.Context, ids []uuid.UUID) ([]e
 
 	rows, err := r.db.Query(ctx, query, ids)
 	if err != nil {
-		r.logger.Error("error getting latest keys", zap.Int("count", len(ids)), zap.Error(err))
 		return nil, err
 	}
 	defer rows.Close()
@@ -46,13 +43,11 @@ func (r *KeyRepository) GetLatestKeys(ctx context.Context, ids []uuid.UUID) ([]e
 	for rows.Next() {
 		var k entity.ChunkKey
 		if err := rows.Scan(&k.UUID, &k.Version, &k.Key, &k.CreatedAt); err != nil {
-			r.logger.Error("error scanning key row", zap.Error(err))
 			return nil, err
 		}
 		result = append(result, k)
 	}
 	if err := rows.Err(); err != nil {
-		r.logger.Error("error iterating key rows", zap.Error(err))
 		return nil, err
 	}
 
@@ -68,7 +63,6 @@ func (r *KeyRepository) GetKeyByVersion(ctx context.Context, id uuid.UUID, versi
 	var k entity.ChunkKey
 	err := r.db.QueryRow(ctx, query, id, version).Scan(&k.UUID, &k.Version, &k.Key, &k.CreatedAt)
 	if err != nil {
-		r.logger.Error("error getting key by version", zap.String("uuid", id.String()), zap.Int("version", version), zap.Error(err))
 		return entity.ChunkKey{}, err
 	}
 	return k, nil
@@ -82,7 +76,6 @@ func (r *KeyRepository) DeleteOldKeys(ctx context.Context, ids []uuid.UUID) erro
 
 	_, err := r.db.Exec(ctx, query, ids)
 	if err != nil {
-		r.logger.Error("failed to delete old chunk keys", zap.Int("count", len(ids)), zap.Error(err))
 		return err
 	}
 	return nil
@@ -98,7 +91,6 @@ func (r *KeyRepository) SaveKeys(ctx context.Context, keys []entity.ChunkKey) er
 	// не тратя ресурсы на то, чтобы продумать что, куда и как записывать.
 	_, err := r.db.CopyFrom(ctx, keysTableInfo, keyColumns, pgx.CopyFromRows(keyRowsHelper(keys)))
 	if err != nil {
-		r.logger.Error("failed to save chunk keys", zap.Int("count", len(keys)), zap.Error(err))
 		return err
 	}
 	return nil

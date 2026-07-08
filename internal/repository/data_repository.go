@@ -7,16 +7,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"go.uber.org/zap"
 )
 
 type DataRepository struct {
-	db     *pgxpool.Pool
-	logger *zap.Logger
+	db *pgxpool.Pool
 }
 
-func NewDataRepository(db *pgxpool.Pool, logger *zap.Logger) *DataRepository {
-	return &DataRepository{db: db, logger: logger}
+func NewDataRepository(db *pgxpool.Pool) *DataRepository {
+	return &DataRepository{db: db}
 }
 
 var (
@@ -33,7 +31,6 @@ func (r *DataRepository) GetLatestData(ctx context.Context, ids []uuid.UUID) ([]
 
 	rows, err := r.db.Query(ctx, query, ids)
 	if err != nil {
-		r.logger.Error("error getting latest data", zap.Int("count", len(ids)), zap.Error(err))
 		return nil, err
 	}
 	defer rows.Close()
@@ -42,13 +39,11 @@ func (r *DataRepository) GetLatestData(ctx context.Context, ids []uuid.UUID) ([]
 	for rows.Next() {
 		var d entity.ChunkData
 		if err := rows.Scan(&d.UUID, &d.Version, &d.Ciphertext, &d.Nonce, &d.FileID); err != nil {
-			r.logger.Error("error scanning data row", zap.Error(err))
 			return nil, err
 		}
 		result = append(result, d)
 	}
 	if err := rows.Err(); err != nil {
-		r.logger.Error("error iterating data rows", zap.Error(err))
 		return nil, err
 	}
 
@@ -64,7 +59,6 @@ func (r *DataRepository) GetDataByVersion(ctx context.Context, id uuid.UUID, ver
 	var d entity.ChunkData
 	err := r.db.QueryRow(ctx, query, id, version).Scan(&d.UUID, &d.Version, &d.Ciphertext, &d.Nonce, &d.FileID)
 	if err != nil {
-		r.logger.Error("error getting data by version", zap.String("uuid", id.String()), zap.Int("version", version), zap.Error(err))
 		return entity.ChunkData{}, err
 	}
 	return d, nil
@@ -82,7 +76,6 @@ func (r *DataRepository) GetChunkUUIDsByFileID(ctx context.Context, fileID uuid.
 
 	rows, err := r.db.Query(ctx, query, fileID, afterUUID, limit)
 	if err != nil {
-		r.logger.Error("error getting chunk uuids by file id", zap.String("file_id", fileID.String()), zap.Error(err))
 		return nil, err
 	}
 	defer rows.Close()
@@ -91,13 +84,11 @@ func (r *DataRepository) GetChunkUUIDsByFileID(ctx context.Context, fileID uuid.
 	for rows.Next() {
 		var id uuid.UUID
 		if err := rows.Scan(&id); err != nil {
-			r.logger.Error("error scanning chunk uuid row", zap.Error(err))
 			return nil, err
 		}
 		result = append(result, id)
 	}
 	if err := rows.Err(); err != nil {
-		r.logger.Error("error iterating chunk uuid rows", zap.Error(err))
 		return nil, err
 	}
 
@@ -112,7 +103,6 @@ func (r *DataRepository) DeleteOldData(ctx context.Context, ids []uuid.UUID) err
 
 	_, err := r.db.Exec(ctx, query, ids)
 	if err != nil {
-		r.logger.Error("failed to delete old chunk data", zap.Int("count", len(ids)), zap.Error(err))
 		return err
 	}
 	return nil
@@ -124,7 +114,6 @@ func (r *DataRepository) SaveData(ctx context.Context, data []entity.ChunkData) 
 		pgx.CopyFromRows(dataRowsHelper(data)),
 	)
 	if err != nil {
-		r.logger.Error("failed to save chunk data", zap.Int("count", len(data)), zap.Error(err))
 		return err
 	}
 	return nil

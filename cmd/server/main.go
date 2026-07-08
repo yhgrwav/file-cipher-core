@@ -45,14 +45,14 @@ func main() {
 		logger.Fatal("connect key db", zap.Error(err))
 	}
 	defer keyPool.Close()
-	keyRepo := repository.NewKeyRepository(keyPool, logger)
+	keyRepo := repository.NewKeyRepository(keyPool)
 
 	dataPool, err := newPool(ctx, cfg.DataDB)
 	if err != nil {
 		logger.Fatal("connect data db", zap.Error(err))
 	}
 	defer dataPool.Close()
-	dataRepo := repository.NewDataRepository(dataPool, logger)
+	dataRepo := repository.NewDataRepository(dataPool)
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     cfg.Redis.Addr,
