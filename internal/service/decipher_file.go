@@ -6,25 +6,34 @@ import (
 	"io"
 
 	"file-cipher-core/internal/entity"
-	"file-cipher-core/internal/repository"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
+type (
+	decipherDataReader interface {
+		GetChunkUUIDsByFileID(ctx context.Context, fileID, afterUUID uuid.UUID, limit int) ([]uuid.UUID, error)
+		GetLatestData(ctx context.Context, ids []uuid.UUID) ([]entity.ChunkData, error)
+	}
+	decipherKeyReader interface {
+		GetLatestKeys(ctx context.Context, ids []uuid.UUID) ([]entity.ChunkKey, error)
+	}
+)
+
 type Decipher struct {
-	config DecipherConfig            // настройки расшифровщика
-	logger *zap.Logger               // логгер
-	data   repository.DataRepository // доступ к БД с данными
-	keys   repository.KeyRepository  // доступ к БД с ключами
+	config DecipherConfig
+	logger *zap.Logger
+	data   decipherDataReader
+	keys   decipherKeyReader
 }
 
 type DecipherConfig struct {
-	// PageSize — размер keyset-страницы при обходе чанков файла.
 	PageSize int
+	Retry    RetryConfig
 }
 
-func NewDecipher(cfg DecipherConfig, logger *zap.Logger, data repository.DataRepository, keys repository.KeyRepository) *Decipher {
+func NewDecipher(cfg DecipherConfig, logger *zap.Logger, data decipherDataReader, keys decipherKeyReader) *Decipher {
 	return &Decipher{
 		config: cfg,
 		logger: logger,
@@ -33,21 +42,22 @@ func NewDecipher(cfg DecipherConfig, logger *zap.Logger, data repository.DataRep
 	}
 }
 
-// StreamFile собирает исходный файл и пишет его в writer юзеру
 func (d *Decipher) StreamFile(ctx context.Context, fileID uuid.UUID, wr io.Writer) error {
-	// т.к. в любой нормальной системе с высоким рпс важно экономить ресурсы, то я бы не добавлял этот лог, но в рамках
-	// тестового, которое вряд ли будет гоняться в каком-то нагрузочном тестировании, решил добавить небольшую запись.
 	d.logger.Info("stream file started", zap.String("file_id", fileID.String()))
 
 	cursor := uuid.Nil
 	var totalChunks int
 	for {
-		if err := ctx.Err(); err != nil { // клиент отвалился || запрос отменён
+		if err := ctx.Err(); err != nil {
 			return err
 		}
 
-		ids, err := d.data.GetChunkUUIDsByFileID(ctx, fileID, cursor, d.config.PageSize)
-		if err != nil {
+		var ids []uuid.UUID
+		if err := retryDo(ctx, d.config.Retry, func() error {
+			var err error
+			ids, err = d.data.GetChunkUUIDsByFileID(ctx, fileID, cursor, d.config.PageSize)
+			return err
+		}); err != nil {
 			return fmt.Errorf("get chunk uuids: %w", err)
 		}
 		if len(ids) == 0 {
@@ -55,25 +65,24 @@ func (d *Decipher) StreamFile(ctx context.Context, fileID uuid.UUID, wr io.Write
 				zap.String("file_id", fileID.String()),
 				zap.Int("total_chunks", totalChunks),
 			)
-			return nil // файл собран, это основное условия выхода
+			return nil
 		}
 
 		if err := d.streamPage(ctx, ids, wr); err != nil {
 			return err
 		}
 		totalChunks += len(ids)
-		cursor = ids[len(ids)-1] // сдвигаем курсор на последний UUID полученной страницы из GetChunkUUIDsByFileID после выполнения логики
-
-		d.logger.Debug("page streamed", zap.String("file_id", fileID.String()), zap.Int("page_size", len(ids)), zap.String("cursor", cursor.String()))
+		cursor = ids[len(ids)-1]
 	}
 }
 
-// streamPage расшифровывает одну страницу чанков и пишет её в writer по порядку
 func (d *Decipher) streamPage(ctx context.Context, ids []uuid.UUID, wr io.Writer) error {
-	// data (БД2) и keys (БД1) приходят в произвольном порядке — индексируем по UUID,
-	// чтобы дальше matchить их с эталонным порядком ids за O(1). (это идея и реализация курсора, я уже не могу думать, а мне ещё ротацию дописывать, но в целом всё понятно)
-	chunks, err := d.data.GetLatestData(ctx, ids)
-	if err != nil {
+	var chunks []entity.ChunkData
+	if err := retryDo(ctx, d.config.Retry, func() error {
+		var err error
+		chunks, err = d.data.GetLatestData(ctx, ids)
+		return err
+	}); err != nil {
 		return fmt.Errorf("get latest data: %w", err)
 	}
 	chunkByUUID := make(map[uuid.UUID]entity.ChunkData, len(chunks))
@@ -81,8 +90,12 @@ func (d *Decipher) streamPage(ctx context.Context, ids []uuid.UUID, wr io.Writer
 		chunkByUUID[c.UUID] = c
 	}
 
-	keys, err := d.keys.GetLatestKeys(ctx, ids)
-	if err != nil {
+	var keys []entity.ChunkKey
+	if err := retryDo(ctx, d.config.Retry, func() error {
+		var err error
+		keys, err = d.keys.GetLatestKeys(ctx, ids)
+		return err
+	}); err != nil {
 		return fmt.Errorf("get latest keys: %w", err)
 	}
 	keyByUUID := make(map[uuid.UUID]entity.ChunkKey, len(keys))
@@ -102,7 +115,6 @@ func (d *Decipher) streamPage(ctx context.Context, ids []uuid.UUID, wr io.Writer
 	return nil
 }
 
-// decryptChunk расшифровывает один чанк, сверяя версии ключа и данных.
 func (d *Decipher) decryptChunk(id uuid.UUID, chunk entity.ChunkData, key entity.ChunkKey) ([]byte, error) {
 	if chunk.UUID == uuid.Nil {
 		return nil, fmt.Errorf("data not found for chunk %s", id)
@@ -110,7 +122,6 @@ func (d *Decipher) decryptChunk(id uuid.UUID, chunk entity.ChunkData, key entity
 	if key.UUID == uuid.Nil {
 		return nil, fmt.Errorf("key not found for chunk %s", id)
 	}
-
 	if key.Version != chunk.Version {
 		return nil, fmt.Errorf("version mismatch for chunk %s: key=%d data=%d", id, key.Version, chunk.Version)
 	}
