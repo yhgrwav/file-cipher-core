@@ -14,8 +14,14 @@ type Config struct {
 	DataDB   DB       `envPrefix:"DATA_DB_"`
 	Redis    Redis    `envPrefix:"REDIS_"`
 	Flusher  Flusher  `envPrefix:"FLUSHER_"`
+	Cipher   Cipher   `envPrefix:"CIPHER_"`
 	Rotation Rotation `envPrefix:"ROTATION_"`
 	Decipher Decipher `envPrefix:"DECIPHER_"`
+}
+
+type Cipher struct {
+	ChunkSize int `env:"CHUNK_SIZE" envDefault:"51200"`
+	Workers   int `env:"WORKERS" envDefault:"8"`
 }
 
 type Redis struct {
