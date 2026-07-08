@@ -74,6 +74,20 @@ func (r *KeyRepository) GetKeyByVersion(ctx context.Context, id uuid.UUID, versi
 	return k, nil
 }
 
+// DeleteOldKeys удаляет все версии ключей, кроме самой свежей
+func (r *KeyRepository) DeleteOldKeys(ctx context.Context, ids []uuid.UUID) error {
+	query := `DELETE FROM cipher.chunk_keys AS c
+			  WHERE c.uuid = ANY($1)
+			    AND c.version < (SELECT max(version) FROM cipher.chunk_keys d WHERE d.uuid = c.uuid)`
+
+	_, err := r.db.Exec(ctx, query, ids)
+	if err != nil {
+		r.logger.Error("failed to delete old chunk keys", zap.Int("count", len(ids)), zap.Error(err))
+		return err
+	}
+	return nil
+}
+
 // SaveKeys - батчевая вставка новых версий ключей.
 func (r *KeyRepository) SaveKeys(ctx context.Context, keys []entity.ChunkKey) error {
 	// в общем CopyFrom для меня стал открытием, т.к. я всегда использовал pgx.Batch, который как я понял рассчитан больше

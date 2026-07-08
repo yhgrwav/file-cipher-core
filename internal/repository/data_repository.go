@@ -104,6 +104,20 @@ func (r *DataRepository) GetChunkUUIDsByFileID(ctx context.Context, fileID uuid.
 	return result, nil
 }
 
+// DeleteOldData удаляет все версии чанков, кроме самой свежей
+func (r *DataRepository) DeleteOldData(ctx context.Context, ids []uuid.UUID) error {
+	query := `DELETE FROM cipher.chunk_data AS c
+			  WHERE c.uuid = ANY($1)
+			    AND c.version < (SELECT max(version) FROM cipher.chunk_data d WHERE d.uuid = c.uuid)`
+
+	_, err := r.db.Exec(ctx, query, ids)
+	if err != nil {
+		r.logger.Error("failed to delete old chunk data", zap.Int("count", len(ids)), zap.Error(err))
+		return err
+	}
+	return nil
+}
+
 // SaveData - батчевая вставка новых версий зашифрованных чанков.
 func (r *DataRepository) SaveData(ctx context.Context, data []entity.ChunkData) error {
 	_, err := r.db.CopyFrom(ctx, dataTableInfo, dataColumns,

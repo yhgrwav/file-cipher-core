@@ -16,9 +16,11 @@ type (
 	rotationDataReader interface {
 		GetChunkUUIDsByFileID(ctx context.Context, fileID, afterUUID uuid.UUID, limit int) ([]uuid.UUID, error)
 		GetLatestData(ctx context.Context, ids []uuid.UUID) ([]entity.ChunkData, error)
+		DeleteOldData(ctx context.Context, ids []uuid.UUID) error
 	}
 	rotationKeyReader interface {
 		GetLatestKeys(ctx context.Context, ids []uuid.UUID) ([]entity.ChunkKey, error)
+		DeleteOldKeys(ctx context.Context, ids []uuid.UUID) error
 	}
 	cursorStore interface {
 		Save(ctx context.Context, op string, cursor uuid.UUID) error
@@ -91,12 +93,40 @@ func (r *Rotator) Run(ctx context.Context, fileID uuid.UUID) error {
 		return err
 	}
 
+	if err := r.deleteOldVersions(ctx, fileID); err != nil {
+		return err
+	}
+
 	if err := r.cursors.Delete(ctx, fileID.String()); err != nil {
 		r.logger.Warn("delete cursor failed", zap.String("file_id", fileID.String()), zap.Error(err))
 	}
 
 	r.logger.Info("rotation finished", zap.String("file_id", fileID.String()))
 	return nil
+}
+
+// deleteOldVersions после успешной ротации постранично удаляет из обеих БД все версии чанков файла,
+// кроме самой свежей. Список uuid берётся из БД данных, т.к. БД ключей file_id не хранит.
+func (r *Rotator) deleteOldVersions(ctx context.Context, fileID uuid.UUID) error {
+	cursor := uuid.Nil
+	for {
+		ids, err := r.data.GetChunkUUIDsByFileID(ctx, fileID, cursor, r.cfg.PageSize)
+		if err != nil {
+			return fmt.Errorf("get chunk uuids: %w", err)
+		}
+		if len(ids) == 0 {
+			return nil
+		}
+
+		if err := r.data.DeleteOldData(ctx, ids); err != nil {
+			return fmt.Errorf("delete old data: %w", err)
+		}
+		if err := r.keys.DeleteOldKeys(ctx, ids); err != nil {
+			return fmt.Errorf("delete old keys: %w", err)
+		}
+
+		cursor = ids[len(ids)-1]
+	}
 }
 
 func (r *Rotator) produce(ctx context.Context, fileID uuid.UUID, out chan<- RotationJob) error {
