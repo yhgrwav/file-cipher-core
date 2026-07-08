@@ -1,17 +1,15 @@
-FROM golang:1.26 AS build
-
-WORKDIR /src
+FROM golang:1.26.1-alpine AS builder
+WORKDIR /app
 
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /app ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd/server
 
-FROM gcr.io/distroless/static-debian12:nonroot
-
-COPY --from=build /app /app
+FROM alpine:3.21
+WORKDIR /root/
+COPY --from=builder /app/main .
 
 EXPOSE 8080
-
-ENTRYPOINT ["/app"]
+CMD ["./main"]
