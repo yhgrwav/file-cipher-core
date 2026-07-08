@@ -55,6 +55,21 @@ func (r *DataRepository) GetLatestData(ctx context.Context, ids []uuid.UUID) ([]
 	return result, nil
 }
 
+// GetDataByVersion возвращает запись чанка на конкретной версии
+func (r *DataRepository) GetDataByVersion(ctx context.Context, id uuid.UUID, version int) (entity.ChunkData, error) {
+	query := `SELECT uuid, version, ciphertext, nonce, file_id
+			  FROM cipher.chunk_data
+			  WHERE uuid = $1 AND version = $2`
+
+	var d entity.ChunkData
+	err := r.db.QueryRow(ctx, query, id, version).Scan(&d.UUID, &d.Version, &d.Ciphertext, &d.Nonce, &d.FileID)
+	if err != nil {
+		r.logger.Error("error getting data by version", zap.String("uuid", id.String()), zap.Int("version", version), zap.Error(err))
+		return entity.ChunkData{}, err
+	}
+	return d, nil
+}
+
 // GetChunkUUIDsByFileID возвращает слайс айди чанков с пагинацией. Такой подход нужен, чтобы выстроить обратный стриминг
 // данных юзеру, но при этом не забивать всю память сервера/тестовой машины данными, а постепенно отдавать куски информации.
 // afterUUID - параметр пагинации.

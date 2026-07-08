@@ -15,9 +15,11 @@ type (
 	decipherDataReader interface {
 		GetChunkUUIDsByFileID(ctx context.Context, fileID, afterUUID uuid.UUID, limit int) ([]uuid.UUID, error)
 		GetLatestData(ctx context.Context, ids []uuid.UUID) ([]entity.ChunkData, error)
+		GetDataByVersion(ctx context.Context, id uuid.UUID, version int) (entity.ChunkData, error)
 	}
 	decipherKeyReader interface {
 		GetLatestKeys(ctx context.Context, ids []uuid.UUID) ([]entity.ChunkKey, error)
+		GetKeyByVersion(ctx context.Context, id uuid.UUID, version int) (entity.ChunkKey, error)
 	}
 )
 
@@ -104,7 +106,16 @@ func (d *Decipher) streamPage(ctx context.Context, ids []uuid.UUID, wr io.Writer
 	}
 
 	for _, id := range ids {
-		plain, err := d.decryptChunk(id, chunkByUUID[id], keyByUUID[id])
+		chunk, key := chunkByUUID[id], keyByUUID[id]
+		if chunk.Version != key.Version {
+			var err error
+			chunk, key, err = d.consistentVersion(ctx, id, chunk, key)
+			if err != nil {
+				return err
+			}
+		}
+
+		plain, err := d.decryptChunk(id, chunk, key)
 		if err != nil {
 			return err
 		}
@@ -113,6 +124,21 @@ func (d *Decipher) streamPage(ctx context.Context, ids []uuid.UUID, wr io.Writer
 		}
 	}
 	return nil
+}
+
+// consistentVersion возвращает консистентные записи из data и keys repository
+func (d *Decipher) consistentVersion(ctx context.Context, id uuid.UUID, chunk entity.ChunkData, key entity.ChunkKey) (entity.ChunkData, entity.ChunkKey, error) {
+	version := min(chunk.Version, key.Version)
+
+	chunk, err := d.data.GetDataByVersion(ctx, id, version)
+	if err != nil {
+		return chunk, key, fmt.Errorf("get data version %d for chunk %s: %w", version, id, err)
+	}
+	key, err = d.keys.GetKeyByVersion(ctx, id, version)
+	if err != nil {
+		return chunk, key, fmt.Errorf("get key version %d for chunk %s: %w", version, id, err)
+	}
+	return chunk, key, nil
 }
 
 func (d *Decipher) decryptChunk(id uuid.UUID, chunk entity.ChunkData, key entity.ChunkKey) ([]byte, error) {

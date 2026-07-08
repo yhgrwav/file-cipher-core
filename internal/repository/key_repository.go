@@ -59,6 +59,21 @@ func (r *KeyRepository) GetLatestKeys(ctx context.Context, ids []uuid.UUID) ([]e
 	return result, nil
 }
 
+// GetKeyByVersion возвращает ключ чанка на конкретной версии.
+func (r *KeyRepository) GetKeyByVersion(ctx context.Context, id uuid.UUID, version int) (entity.ChunkKey, error) {
+	query := `SELECT uuid, version, key, created_at
+			  FROM cipher.chunk_keys
+			  WHERE uuid = $1 AND version = $2`
+
+	var k entity.ChunkKey
+	err := r.db.QueryRow(ctx, query, id, version).Scan(&k.UUID, &k.Version, &k.Key, &k.CreatedAt)
+	if err != nil {
+		r.logger.Error("error getting key by version", zap.String("uuid", id.String()), zap.Int("version", version), zap.Error(err))
+		return entity.ChunkKey{}, err
+	}
+	return k, nil
+}
+
 // SaveKeys - батчевая вставка новых версий ключей.
 func (r *KeyRepository) SaveKeys(ctx context.Context, keys []entity.ChunkKey) error {
 	// в общем CopyFrom для меня стал открытием, т.к. я всегда использовал pgx.Batch, который как я понял рассчитан больше
