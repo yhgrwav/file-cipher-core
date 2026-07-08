@@ -53,7 +53,6 @@ type Decipher struct {
 }
 
 type DB struct {
-	Addr     string `env:"ADDR"`
 	User     string `env:"USER"`
 	Pass     string `env:"PASS"`
 	Name     string `env:"NAME"`
@@ -63,9 +62,6 @@ type DB struct {
 	MaxConns int    `env:"MAX_CONN"`
 	MinConns int    `env:"MIN_CONN"`
 	DSN      string `env:"DSN"`
-
-	// пагинация для data repository
-	PageSize int `env:"PAGE_SIZE" envDefault:"1000"`
 }
 
 type Server struct {
