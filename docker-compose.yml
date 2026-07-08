@@ -1,6 +1,6 @@
 services:
   key-db:
-    image: postgres:16
+    image: postgres:18
     environment:
       POSTGRES_USER: ${KEY_DB_USER}
       POSTGRES_PASSWORD: ${KEY_DB_PASS}
@@ -14,7 +14,7 @@ services:
       retries: 10
 
   data-db:
-    image: postgres:16
+    image: postgres:18
     environment:
       POSTGRES_USER: ${DATA_DB_USER}
       POSTGRES_PASSWORD: ${DATA_DB_PASS}
