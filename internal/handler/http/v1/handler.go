@@ -2,10 +2,9 @@ package v1
 
 import (
 	"context"
+	"file-cipher-core/internal/handler/http/middleware"
 	"io"
 	"net/http"
-
-	"file-cipher-core/internal/middleware"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
