@@ -250,6 +250,7 @@ type RetryConfig struct {
 	Backoff  time.Duration
 }
 
+// retryDo - хелпер, который делает n ретраев в принимаемой функции
 func retryDo(ctx context.Context, cfg RetryConfig, fn func() error) error {
 	var lastErr error
 	for attempt := 0; attempt <= cfg.Attempts; attempt++ {

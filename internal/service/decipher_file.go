@@ -44,6 +44,7 @@ func NewDecipher(cfg DecipherConfig, logger *zap.Logger, data decipherDataReader
 	}
 }
 
+// StreamFile постранично идёт по чанкам файла и стримит расшифрованные данные в wr
 func (d *Decipher) StreamFile(ctx context.Context, fileID uuid.UUID, wr io.Writer) error {
 	d.logger.Info("stream file started", zap.String("file_id", fileID.String()))
 
@@ -78,6 +79,7 @@ func (d *Decipher) StreamFile(ctx context.Context, fileID uuid.UUID, wr io.Write
 	}
 }
 
+// streamPage расшифровывает одну страницу чанков (с ретраями запросов) и пишет их в wr
 func (d *Decipher) streamPage(ctx context.Context, ids []uuid.UUID, wr io.Writer) error {
 	var chunks []entity.ChunkData
 	if err := retryDo(ctx, d.config.Retry, func() error {
