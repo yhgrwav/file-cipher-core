@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -22,6 +23,8 @@ type (
 		GetKeyByVersion(ctx context.Context, id uuid.UUID, version int) (entity.ChunkKey, error)
 	}
 )
+
+var ErrIDsNotFound = errors.New("ids not found")
 
 type Decipher struct {
 	config DecipherConfig
@@ -64,11 +67,8 @@ func (d *Decipher) StreamFile(ctx context.Context, fileID uuid.UUID, wr io.Write
 			return fmt.Errorf("get chunk uuids: %w", err)
 		}
 		if len(ids) == 0 {
-			d.logger.Info("stream file finished",
-				zap.String("file_id", fileID.String()),
-				zap.Int("total_chunks", totalChunks),
-			)
-			return nil
+			d.logger.Info("stream file finished", zap.String("file_id", fileID.String()), zap.Int("total_chunks", totalChunks))
+			return ErrIDsNotFound
 		}
 
 		if err := d.streamPage(ctx, ids, wr); err != nil {
@@ -89,6 +89,8 @@ func (d *Decipher) streamPage(ctx context.Context, ids []uuid.UUID, wr io.Writer
 	}); err != nil {
 		return fmt.Errorf("get latest data: %w", err)
 	}
+
+	// мапа, где ключ - uuid, значение - чанк
 	chunkByUUID := make(map[uuid.UUID]entity.ChunkData, len(chunks))
 	for _, c := range chunks {
 		chunkByUUID[c.UUID] = c
@@ -102,6 +104,8 @@ func (d *Decipher) streamPage(ctx context.Context, ids []uuid.UUID, wr io.Writer
 	}); err != nil {
 		return fmt.Errorf("get latest keys: %w", err)
 	}
+
+	// мапа, где ключ - uuid, значение - ключ чанка.
 	keyByUUID := make(map[uuid.UUID]entity.ChunkKey, len(keys))
 	for _, k := range keys {
 		keyByUUID[k.UUID] = k
@@ -111,7 +115,7 @@ func (d *Decipher) streamPage(ctx context.Context, ids []uuid.UUID, wr io.Writer
 		chunk, key := chunkByUUID[id], keyByUUID[id]
 		if chunk.Version != key.Version {
 			var err error
-			chunk, key, err = d.consistentVersion(ctx, id, chunk, key)
+			chunk, key, err = d.getConsistentVersion(ctx, id, chunk, key)
 			if err != nil {
 				return err
 			}
@@ -128,8 +132,8 @@ func (d *Decipher) streamPage(ctx context.Context, ids []uuid.UUID, wr io.Writer
 	return nil
 }
 
-// consistentVersion возвращает консистентные записи из data и keys repository
-func (d *Decipher) consistentVersion(ctx context.Context, id uuid.UUID, chunk entity.ChunkData, key entity.ChunkKey) (entity.ChunkData, entity.ChunkKey, error) {
+// getConsistentVersion возвращает консистентные записи из data и keys repository
+func (d *Decipher) getConsistentVersion(ctx context.Context, id uuid.UUID, chunk entity.ChunkData, key entity.ChunkKey) (entity.ChunkData, entity.ChunkKey, error) {
 	version := min(chunk.Version, key.Version)
 
 	chunk, err := d.data.GetDataByVersion(ctx, id, version)
