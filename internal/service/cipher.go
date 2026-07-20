@@ -48,6 +48,8 @@ func Decrypt(key, ciphertext, nonce []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// если длина меньше тега - это ошибка и нет смысла пытаться расшифровывать данные.
 	if len(ciphertext) < gcm.Overhead() {
 		return nil, ErrShortCiphertext
 	}
