@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"file-cipher-core/internal/repository"
 	"fmt"
 	"time"
 
@@ -11,12 +10,11 @@ import (
 	"go.uber.org/zap"
 )
 
-
 // SUMMARY:
 // получаем данные -> пишем их в redis (на диск, не в память) -> отдаём список айдишников в pendingWorker ->
 // там данные дописываются из redis в postgres
 
-type pendingWriter interface {
+type PendingWriter interface {
 	AddBatch(ctx context.Context, items []entity.FlushItem) ([]string, error)
 }
 
@@ -41,12 +39,12 @@ type FlusherConfig struct {
 // принудительно опустошается, отгружая все данные в БД, если поток данных маленький, но всё же есть - срабатывает FlushTime,
 // который по определённому кулдауну вызывает flush. в зависимости передаётся оба репозитория и логгер, ничего необычного
 type Flusher struct {
-	pendingRepo pendingWriter
+	pendingRepo PendingWriter
 	logger      *zap.Logger
 	cfg         FlusherConfig
 }
 
-func NewFlusher(pendingRepo *repository.PendingStore, logger *zap.Logger, cfg FlusherConfig) *Flusher {
+func NewFlusher(pendingRepo PendingWriter, logger *zap.Logger, cfg FlusherConfig) *Flusher {
 	return &Flusher{
 		pendingRepo: pendingRepo,
 		logger:      logger,
