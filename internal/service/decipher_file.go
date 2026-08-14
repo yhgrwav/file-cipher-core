@@ -12,6 +12,10 @@ import (
 	"go.uber.org/zap"
 )
 
+// 1. read(stream) file
+// 2. get latest version(data, keys)
+// 3. stream in writer with common ctx
+
 type (
 	decipherDataReader interface {
 		GetChunkUUIDsByFileID(ctx context.Context, fileID, afterUUID uuid.UUID, limit int) ([]uuid.UUID, error)

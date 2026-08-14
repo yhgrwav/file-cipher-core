@@ -67,15 +67,36 @@ func main() {
 	}()
 	cursors := repository.NewCursorStore(rdb, cfg.Redis.CursorTTL)
 
+	pendingStore, err := repository.NewPendingStore(rdb, logger, cfg.Redis)
+	if err != nil {
+		logger.Fatal("init pending store", zap.Error(err))
+	}
+	if err := pendingStore.CursorInit(ctx); err != nil {
+		logger.Fatal("init pending cursor", zap.Error(err))
+	}
+
 	logger.Info("dependencies connected")
 
-	flusher := service.NewFlusher(keyRepo, dataRepo, logger, service.FlusherConfig{
+	flusher := service.NewFlusher(pendingStore, logger, service.FlusherConfig{
 		BatchSize:            cfg.Flusher.BatchSize,
 		FlushTime:            cfg.Flusher.FlushTime,
 		ShutdownFlushTimeout: cfg.Flusher.ShutdownFlushTimeout,
 		WriteRetries:         cfg.Flusher.WriteRetries,
 		WriteRetryBackoff:    cfg.Flusher.WriteRetryBackoff,
 	})
+
+	pendingWorker := service.NewPendingWorker(pendingStore, dataRepo, keyRepo, logger, service.PendingWorkerConfig{
+		Amount:            cfg.Pending.Amount,
+		ClaimInterval:     cfg.Pending.ClaimInterval,
+		ClaimMinIdle:      cfg.Pending.ClaimMinIdle,
+		WriteRetries:      cfg.Pending.WriteRetries,
+		WriteRetryBackoff: cfg.Pending.WriteRetryBackoff,
+	})
+	go func() {
+		if err := pendingWorker.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			logger.Error("pending worker stopped", zap.Error(err))
+		}
+	}()
 
 	cipher := service.NewCipher(flusher, logger, service.CipherConfig{
 		ChunkSize: cfg.Cipher.ChunkSize,

@@ -13,6 +13,12 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// worker pool
+// 1. parallel read
+// 2. encrypt chunk
+// 3. batch append
+// 4. EOF -> flush
+
 type CipherConfig struct {
 	ChunkSize int
 	Workers   int
@@ -43,7 +49,7 @@ func (c *Cipher) EncryptFile(ctx context.Context, fileID uuid.UUID, src io.Reade
 
 	g, ctx := errgroup.WithContext(ctx)
 	jobs := make(chan encryptJob, c.cfg.Workers)
-	items := make(chan FlushItem, c.cfg.Workers)
+	items := make(chan entity.FlushItem, c.cfg.Workers)
 
 	g.Go(func() error {
 		return c.flusher.Run(ctx, items)
@@ -98,7 +104,7 @@ func (c *Cipher) read(ctx context.Context, fileID uuid.UUID, src io.Reader, out 
 	}
 }
 
-func encryptWorker(ctx context.Context, in <-chan encryptJob, out chan<- FlushItem) error {
+func encryptWorker(ctx context.Context, in <-chan encryptJob, out chan<- entity.FlushItem) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -118,7 +124,7 @@ func encryptWorker(ctx context.Context, in <-chan encryptJob, out chan<- FlushIt
 			}
 
 			now := time.Now()
-			item := FlushItem{
+			item := entity.FlushItem{
 				Key: entity.ChunkKey{
 					UUID:      job.chunkID,
 					Key:       key,

@@ -17,6 +17,7 @@ type Config struct {
 	Cipher   Cipher   `envPrefix:"CIPHER_"`
 	Rotation Rotation `envPrefix:"ROTATION_"`
 	Decipher Decipher `envPrefix:"DECIPHER_"`
+	Pending  Pending  `envPrefix:"PENDING_"`
 }
 
 type Cipher struct {
@@ -25,10 +26,13 @@ type Cipher struct {
 }
 
 type Redis struct {
-	Addr      string        `env:"ADDR" envDefault:"localhost:6379"`
-	Password  string        `env:"PASSWORD"`
-	DB        int           `env:"DB" envDefault:"0"`
-	CursorTTL time.Duration `env:"CURSOR_TTL" envDefault:"24h"`
+	Addr       string        `env:"ADDR" envDefault:"localhost:6379"`
+	Password   string        `env:"PASSWORD"`
+	DB         int           `env:"DB" envDefault:"0"`
+	CursorTTL  time.Duration `env:"CURSOR_TTL" envDefault:"24h"`
+	Queue      string        `env:"QUEUE" envDefault:"cipher:pending"`
+	CursorName string        `env:"CURSOR_NAME" envDefault:"cool_cursor"`
+	ReadBlock  time.Duration `env:"READ_BLOCK" envDefault:"5s"`
 }
 
 type Flusher struct {
@@ -50,6 +54,23 @@ type Decipher struct {
 	PageSize      int           `env:"PAGE_SIZE" envDefault:"1000"`
 	RetryAttempts int           `env:"RETRY_ATTEMPTS" envDefault:"3"`
 	RetryBackoff  time.Duration `env:"RETRY_BACKOFF" envDefault:"100ms"`
+}
+
+type Pending struct {
+	// Amount - сколько записей за раз вычитывать из Redis (XReadGroup Count / XAutoClaim Count)
+	Amount int `env:"AMOUNT" envDefault:"1000"`
+
+	// ClaimInterval - как часто пытаться забрать зависшие записи из PEL
+	ClaimInterval time.Duration `env:"CLAIM_INTERVAL" envDefault:"30s"`
+
+	// ClaimMinIdle - сколько запись должна провисеть в PEL без Ack, чтобы считаться зависшей
+	ClaimMinIdle time.Duration `env:"CLAIM_MIN_IDLE" envDefault:"1m"`
+
+	// WriteRetries - сколько раз повторить запись батча в Postgres при ошибке
+	WriteRetries int `env:"WRITE_RETRIES" envDefault:"3"`
+
+	// WriteRetryBackoff - базовая пауза между повторами записи в Postgres
+	WriteRetryBackoff time.Duration `env:"WRITE_RETRY_BACKOFF" envDefault:"100ms"`
 }
 
 type DB struct {

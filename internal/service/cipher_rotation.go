@@ -12,6 +12,14 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// worker pool
+// rotationJob(curent data, oldkey)
+// cursor based flusher
+// parallel worker with common context
+// 1. parallel worker (produce with retry)
+// 2. delete old version
+// 3. commit
+
 type (
 	rotationDataReader interface {
 		GetChunkUUIDsByFileID(ctx context.Context, fileID, afterUUID uuid.UUID, limit int) ([]uuid.UUID, error)
@@ -65,7 +73,7 @@ func (r *Rotator) Run(ctx context.Context, fileID uuid.UUID) error {
 
 	g, ctx := errgroup.WithContext(ctx)
 	jobs := make(chan RotationJob, r.cfg.Workers)
-	items := make(chan FlushItem, r.cfg.Workers)
+	items := make(chan entity.FlushItem, r.cfg.Workers)
 
 	g.Go(func() error {
 		return r.flusher.Run(ctx, items)
@@ -194,7 +202,7 @@ func (r *Rotator) produce(ctx context.Context, fileID uuid.UUID, out chan<- Rota
 	}
 }
 
-func rotationWorker(ctx context.Context, in <-chan RotationJob, out chan<- FlushItem) error {
+func rotationWorker(ctx context.Context, in <-chan RotationJob, out chan<- entity.FlushItem) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -219,7 +227,7 @@ func rotationWorker(ctx context.Context, in <-chan RotationJob, out chan<- Flush
 
 			version := job.Current.Version + 1
 			now := time.Now()
-			item := FlushItem{
+			item := entity.FlushItem{
 				Key: entity.ChunkKey{
 					UUID:      job.Current.UUID,
 					Key:       newKey,

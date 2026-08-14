@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"file-cipher-core/internal/repository"
 	"fmt"
 	"time"
 
@@ -10,19 +11,13 @@ import (
 	"go.uber.org/zap"
 )
 
-type (
-	keyWriter interface {
-		SaveKeys(ctx context.Context, keys []entity.ChunkKey) error
-	}
-	dataWriter interface {
-		SaveData(ctx context.Context, data []entity.ChunkData) error
-	}
-)
 
-// FlushItem - структура, с помощью которой можно удобно передавать ключи и данные между каналами
-type FlushItem struct {
-	Key  entity.ChunkKey
-	Data entity.ChunkData
+// SUMMARY:
+// получаем данные -> пишем их в redis (на диск, не в память) -> отдаём список айдишников в pendingWorker ->
+// там данные дописываются из redis в postgres
+
+type pendingWriter interface {
+	AddBatch(ctx context.Context, items []entity.FlushItem) ([]string, error)
 }
 
 type FlusherConfig struct {
@@ -44,58 +39,50 @@ type FlusherConfig struct {
 
 // Flusher решает проблему записи данных в базу, базовый паттерн, задаётся BatchSize и FlushTime -> если батч переполнился -
 // принудительно опустошается, отгружая все данные в БД, если поток данных маленький, но всё же есть - срабатывает FlushTime,
-// который по определённому кулдауну вызывает flush. в зависимости передаётся оба репозитория и логгер, ничего необычного.
+// который по определённому кулдауну вызывает flush. в зависимости передаётся оба репозитория и логгер, ничего необычного
 type Flusher struct {
-	keyRepo  keyWriter
-	dataRepo dataWriter
-	logger   *zap.Logger
-	cfg      FlusherConfig
+	pendingRepo pendingWriter
+	logger      *zap.Logger
+	cfg         FlusherConfig
 }
 
-func NewFlusher(keyRepo keyWriter, dataRepo dataWriter, logger *zap.Logger, cfg FlusherConfig) *Flusher {
+func NewFlusher(pendingRepo *repository.PendingStore, logger *zap.Logger, cfg FlusherConfig) *Flusher {
 	return &Flusher{
-		keyRepo:  keyRepo,
-		dataRepo: dataRepo,
-		logger:   logger,
-		cfg:      cfg,
+		pendingRepo: pendingRepo,
+		logger:      logger,
+		cfg:         cfg,
 	}
 }
 
-// Run читает результаты из in до закрытия канала, батчами записывая их в обе БД.
+// Run читает результаты из in до закрытия канала, батчами записывая их в Redis.
 // Возвращает ошибку первой неудачной записи; при штатном завершении (in закрыт)
-// дописывает остаток и возвращает nil.
-func (f *Flusher) Run(ctx context.Context, in <-chan FlushItem) error {
-	// 1. создаётся два батча для двух БД
-	keys := make([]entity.ChunkKey, 0, f.cfg.BatchSize)
-	data := make([]entity.ChunkData, 0, f.cfg.BatchSize)
+// дописывает остаток и возвращает nil
+func (f *Flusher) Run(ctx context.Context, in <-chan entity.FlushItem) error {
+	items := make([]entity.FlushItem, 0, f.cfg.BatchSize)
 
-	// 2. инициализируется таймер с заданным в конфиге параметром
 	timer := time.NewTimer(f.cfg.FlushTime)
 	defer timer.Stop()
 
-	// flush - функция-переменная, которая проверяет есть ли данные и если есть - отправляет, обрабатывает ошибку и обнуляет батч
 	flush := func() error {
-		if len(data) == 0 {
+		if len(items) == 0 {
 			return nil
 		}
-		if err := f.write(ctx, keys, data); err != nil {
+		if err := f.write(ctx, items); err != nil {
 			return err
 		}
-		keys = keys[:0]
-		data = data[:0]
+		items = items[:0]
 		return nil
 	}
 
 	for {
 		select {
 		case <-ctx.Done():
-			// дозаписывается всё, что уже есть в data батче
-			if len(data) > 0 {
+			if len(items) > 0 {
 				flushCtx, cancel := context.WithTimeout(context.Background(), f.cfg.ShutdownFlushTimeout)
-				err := f.write(flushCtx, keys, data)
+				err := f.write(flushCtx, items)
 				cancel()
 				if err != nil {
-					f.logger.Error("flush tail on shutdown failed", zap.Int("lost", len(data)), zap.Error(err))
+					f.logger.Error("flush tail on shutdown failed", zap.Int("lost", len(items)), zap.Error(err))
 				}
 			}
 			f.logger.Info("Flusher worker done")
@@ -103,14 +90,10 @@ func (f *Flusher) Run(ctx context.Context, in <-chan FlushItem) error {
 
 		case v, ok := <-in:
 			if !ok {
-				// если канал закрыт - вызываем последний flush и выходим
 				return flush()
 			}
-			// если всё ок - добавляем в батчи полученные данные.
-			keys = append(keys, v.Key)
-			data = append(data, v.Data)
-			if len(data) >= f.cfg.BatchSize {
-				// если полученные данные больше, чем батч - освобождаем батч
+			items = append(items, v)
+			if len(items) >= f.cfg.BatchSize {
 				if err := flush(); err != nil {
 					return err
 				}
@@ -126,42 +109,16 @@ func (f *Flusher) Run(ctx context.Context, in <-chan FlushItem) error {
 	}
 }
 
-// write кладёт пачку в обе базы.
-func (f *Flusher) write(ctx context.Context, keys []entity.ChunkKey, data []entity.ChunkData) error {
-	if err := f.withRetry(ctx, func() error {
-		return f.dataRepo.SaveData(ctx, data)
+// write кладёт пачку в Redis
+func (f *Flusher) write(ctx context.Context, items []entity.FlushItem) error {
+	if err := withRetry(ctx, f.cfg.WriteRetries, f.cfg.WriteRetryBackoff, func() error {
+		_, err := f.pendingRepo.AddBatch(ctx, items)
+		return err
 	}); err != nil {
-		return fmt.Errorf("flush data batch (%d): %w", len(data), err)
+		return fmt.Errorf("flush pending batch (%d): %w", len(items), err)
 	}
-	if err := f.withRetry(ctx, func() error {
-		return f.keyRepo.SaveKeys(ctx, keys)
-	}); err != nil {
-		return fmt.Errorf("flush key batch (%d): %w", len(keys), err)
-	}
-	f.logger.Debug("batch flushed", zap.Int("count", len(data)))
+	f.logger.Debug("batch flushed to pending", zap.Int("count", len(items)))
 	return nil
-}
-
-// withRetry реализует линейный бэкофф
-func (f *Flusher) withRetry(ctx context.Context, writeBatch func() error) error {
-	var lastErr error
-	for attempt := 0; attempt <= f.cfg.WriteRetries; attempt++ {
-		if attempt > 0 {
-			select {
-			case <-ctx.Done():
-				return lastErr
-			case <-time.After(f.cfg.WriteRetryBackoff):
-			}
-		}
-		lastErr = writeBatch()
-		if lastErr == nil {
-			return nil
-		}
-		if ctx.Err() != nil {
-			return lastErr
-		}
-	}
-	return fmt.Errorf("write failed after %d retries: %w", f.cfg.WriteRetries+1, lastErr)
 }
 
 // хелпер для ресета таймера

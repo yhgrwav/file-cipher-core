@@ -18,6 +18,8 @@ func NewCursorStore(rdb *redis.Client, ttl time.Duration) *CursorStore {
 	return &CursorStore{rdb: rdb, ttl: ttl}
 }
 
+// op - произвольный идентификатор процесса, для которого хранится курсор
+
 func (s *CursorStore) key(op string) string {
 	return "cursor:" + op
 }

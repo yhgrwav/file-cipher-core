@@ -7,6 +7,12 @@ import (
 	"errors"
 )
 
+
+
+//TODO:
+// oneshot func 
+
+
 // KeySize - размер ключа AES-256 в байтах (256 бит).
 const KeySize = 32
 
