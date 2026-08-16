@@ -15,6 +15,14 @@ import (
 	"go.uber.org/zap"
 )
 
+// SUMMARY:
+// methods:
+// 1. AddBatch (+flush)
+// 2. Read
+// 3. Ack
+// 4. Init
+// 5. Claim
+
 type PendingStore struct {
 	rdb    *redis.Client
 	logger *zap.Logger
