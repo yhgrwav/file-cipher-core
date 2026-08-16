@@ -90,10 +90,10 @@ func (r *KeyRepository) SaveKeys(ctx context.Context, keys []entity.ChunkKey) er
 	// колонок и передаём [][]any из наших данных, которые библиотека преобразует в бесполые записи и записывает эффективне,
 	// не тратя ресурсы на то, чтобы продумать что, куда и как записывать.
 	_, err := r.db.CopyFrom(ctx, keysTableInfo, keyColumns, pgx.CopyFromRows(keyRowsHelper(keys)))
-	if err != nil {
-		return err
+	if isUniqueViolation(err) {
+		return nil
 	}
-	return nil
+	return err
 }
 
 // хелпер для вставок в таблицу с ключами

@@ -110,13 +110,11 @@ func (r *DataRepository) DeleteOldData(ctx context.Context, ids []uuid.UUID) err
 
 // SaveData - батчевая вставка новых версий зашифрованных чанков.
 func (r *DataRepository) SaveData(ctx context.Context, data []entity.ChunkData) error {
-	_, err := r.db.CopyFrom(ctx, dataTableInfo, dataColumns,
-		pgx.CopyFromRows(dataRowsHelper(data)),
-	)
-	if err != nil {
-		return err
+	_, err := r.db.CopyFrom(ctx, dataTableInfo, dataColumns, pgx.CopyFromRows(dataRowsHelper(data)))
+	if isUniqueViolation(err) {
+		return nil
 	}
-	return nil
+	return err
 }
 
 // хелпер для вставок в таблицу с данными
