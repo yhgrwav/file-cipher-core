@@ -71,8 +71,11 @@ func (d *Decipher) StreamFile(ctx context.Context, fileID uuid.UUID, wr io.Write
 			return fmt.Errorf("get chunk uuids: %w", err)
 		}
 		if len(ids) == 0 {
+			if totalChunks == 0 {
+				return ErrIDsNotFound
+			}
 			d.logger.Info("stream file finished", zap.String("file_id", fileID.String()), zap.Int("total_chunks", totalChunks))
-			return ErrIDsNotFound
+			return nil
 		}
 
 		if err := d.streamPage(ctx, ids, wr); err != nil {
