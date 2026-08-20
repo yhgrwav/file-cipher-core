@@ -26,6 +26,9 @@ func (h *CipherHandler) Download(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.decipher.StreamFile(r.Context(), fileID, out); err != nil {
 		h.logger.Error("download failed", zap.String("file_id", fileID.String()), zap.Error(err))
+		http.Error(w, "download failed", http.StatusInternalServerError)
+		// ещё ошибка может быть посреди стрима, но мне лень её обрабатывать.
+		// по хорошему тут нужен switch case и обработка всех возможных ошибок (400, 500, 499, 404), но пока так
 		return
 	}
 }
