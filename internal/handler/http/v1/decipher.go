@@ -8,8 +8,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// trackingWriter - приватная структура, которая будет давать доступ к respWriter, будет иметь доступ к флашеру и иметь
-// состояние записи bool
+// trackingWriter - приватная структура, хранящая состояние "успели ли мы записать хоть один байт" (
+// если written == true - передаём соединение Hijacker и обрываем, если нет - кидаем http.Error(500)
 type trackingWriter struct {
 	wr      http.ResponseWriter
 	f       http.Flusher
@@ -65,10 +65,10 @@ func (h *CipherHandler) Download(w http.ResponseWriter, r *http.Request) {
 }
 
 func (tw *trackingWriter) Write(p []byte) (int, error) {
+	// если запись вызвалась - уже необходимо передать состояние, т.к. заголовки уже отправлены
+	tw.written = true
 	n, err := tw.wr.Write(p)
-	if n > 0 {
-		tw.written = true
-	}
+
 	if tw.f != nil {
 		tw.f.Flush()
 	}
