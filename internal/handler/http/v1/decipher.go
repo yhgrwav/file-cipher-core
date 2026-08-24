@@ -2,12 +2,19 @@ package v1
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
+
+// trackingWriter - приватная структура, которая будет давать доступ к respWriter, будет иметь доступ к флашеру и иметь
+// состояние записи bool
+type trackingWriter struct {
+	wr      http.ResponseWriter
+	f       http.Flusher
+	written bool
+}
 
 func (h *CipherHandler) Download(w http.ResponseWriter, r *http.Request) {
 	fileID, err := uuid.Parse(r.PathValue("fileID"))
@@ -19,27 +26,51 @@ func (h *CipherHandler) Download(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", fileID.String()+".bin"))
 
-	var out io.Writer = w
+	tw := &trackingWriter{wr: w}
+
+	// если имплементируем интерфейсу и можем вызывать метод Flush() - ок. подставляем флашер и двигаемся дальше
+	// если нет - явно обрабатываем этот сценарий, чтоб приложение не поломалось. без явного Flush() данные тоже будут
+	// грузиться, но рывками. не критично, но главное безопасно, т.к. есть явная проверка на ok || !ok
 	if f, ok := w.(http.Flusher); ok {
-		out = &flushWriter{w: w, f: f}
+		tw.f = f
 	}
 
-	if err := h.decipher.StreamFile(r.Context(), fileID, out); err != nil {
+	if err := h.decipher.StreamFile(r.Context(), fileID, tw); err != nil {
 		h.logger.Error("download failed", zap.String("file_id", fileID.String()), zap.Error(err))
-		http.Error(w, "download failed", http.StatusInternalServerError)
-		// ещё ошибка может быть посреди стрима, но мне лень её обрабатывать.
-		// по хорошему тут нужен switch case и обработка всех возможных ошибок (400, 500, 499, 404), но пока так
+
+		// если ни единого байта не записалось - это internal ошибка и можно сразу отдать 500 статускод
+		if !tw.written {
+			http.Error(w, "download failed", http.StatusInternalServerError)
+			return
+		}
+
+		// когда часть тела уже отправлена клиенту, статус 200 и заголовки поменять больше нельзя.
+		// если просто сделать return, net/http сам корректно допишет завершающий чанк,
+		// и клиент получит "успешный", но обрезанный файл без признаков ошибки.
+		// Hijacker забирает управление соединением у сервера, чтобы мы могли
+		// резко оборвать его (conn.Close()) - тогда клиент получит явную ошибку
+		// транспорта вместо испорченного файла.
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			return
+		}
+		conn, _, err := hj.Hijack()
+		if err != nil {
+			h.logger.Error("hijack failed", zap.String("file_id", fileID.String()), zap.Error(err))
+			return
+		}
+		conn.Close()
 		return
 	}
 }
 
-type flushWriter struct {
-	w io.Writer
-	f http.Flusher
-}
-
-func (fw *flushWriter) Write(p []byte) (int, error) {
-	n, err := fw.w.Write(p)
-	fw.f.Flush()
+func (tw *trackingWriter) Write(p []byte) (int, error) {
+	n, err := tw.wr.Write(p)
+	if n > 0 {
+		tw.written = true
+	}
+	if tw.f != nil {
+		tw.f.Flush()
+	}
 	return n, err
 }
