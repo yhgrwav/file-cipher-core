@@ -16,6 +16,8 @@ const KeySize = 32
 // ErrShortCiphertext возвращается, когда на расшифровку пришло меньше данных, чем занимает тег аутентификации GCM.
 var ErrShortCiphertext = errors.New("ciphertext is too short")
 
+var ErrInvalidNonce = errors.New("nonce has invalid length")
+
 // GenerateKey генерирует случайный AES-256 ключ
 func GenerateKey() ([]byte, error) {
 	key := make([]byte, KeySize) // 32 байта, потому что AES-256 требует именно 32 байта
@@ -55,6 +57,9 @@ func Decrypt(key, ciphertext, nonce []byte) ([]byte, error) {
 	// если длина меньше тега - это ошибка и нет смысла пытаться расшифровывать данные.
 	if len(ciphertext) < gcm.Overhead() {
 		return nil, ErrShortCiphertext
+	}
+	if len(nonce) != gcm.NonceSize() {
+		return nil, ErrInvalidNonce
 	}
 	return gcm.Open(nil, nonce, ciphertext, nil)
 }
