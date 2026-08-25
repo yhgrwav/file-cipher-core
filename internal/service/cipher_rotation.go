@@ -71,16 +71,16 @@ func NewRotator(data rotationDataReader, keys rotationKeyReader, flusher *Flushe
 func (r *Rotator) Run(ctx context.Context, fileID uuid.UUID) error {
 	r.logger.Info("rotation started", "file_id", fileID.String())
 
-	g, ctx := errgroup.WithContext(ctx)
+	g, gctx := errgroup.WithContext(ctx)
 	jobs := make(chan RotationJob, r.cfg.Workers)
 	items := make(chan entity.FlushItem, r.cfg.Workers)
 
 	g.Go(func() error {
-		return r.flusher.Run(ctx, items)
+		return r.flusher.Run(gctx, items)
 	})
 
 	g.Go(func() error {
-		wg, wctx := errgroup.WithContext(ctx)
+		wg, wctx := errgroup.WithContext(gctx)
 		for i := 0; i < r.cfg.Workers; i++ {
 			wg.Go(func() error {
 				return rotationWorker(wctx, jobs, items)
@@ -93,7 +93,7 @@ func (r *Rotator) Run(ctx context.Context, fileID uuid.UUID) error {
 
 	g.Go(func() error {
 		defer close(jobs)
-		return r.produce(ctx, fileID, jobs)
+		return r.produce(gctx, fileID, jobs)
 	})
 
 	if err := g.Wait(); err != nil {
