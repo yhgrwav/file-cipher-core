@@ -7,9 +7,9 @@ import (
 	"io"
 
 	"file-cipher-core/internal/entity"
+	"file-cipher-core/pkg/logger"
 
 	"github.com/google/uuid"
-	"go.uber.org/zap"
 )
 
 // 1. read(stream) file
@@ -32,7 +32,7 @@ var ErrIDsNotFound = errors.New("ids not found")
 
 type Decipher struct {
 	config DecipherConfig
-	logger *zap.Logger
+	logger logger.Logger
 	data   decipherDataReader
 	keys   decipherKeyReader
 }
@@ -42,7 +42,7 @@ type DecipherConfig struct {
 	Retry    RetryConfig
 }
 
-func NewDecipher(cfg DecipherConfig, logger *zap.Logger, data decipherDataReader, keys decipherKeyReader) *Decipher {
+func NewDecipher(cfg DecipherConfig, logger logger.Logger, data decipherDataReader, keys decipherKeyReader) *Decipher {
 	return &Decipher{
 		config: cfg,
 		logger: logger,
@@ -53,7 +53,7 @@ func NewDecipher(cfg DecipherConfig, logger *zap.Logger, data decipherDataReader
 
 // StreamFile постранично идёт по чанкам файла и стримит расшифрованные данные в wr
 func (d *Decipher) StreamFile(ctx context.Context, fileID uuid.UUID, wr io.Writer) error {
-	d.logger.Info("stream file started", zap.String("file_id", fileID.String()))
+	d.logger.Info("stream file started", "file_id", fileID.String())
 
 	cursor := uuid.Nil
 	var totalChunks int
@@ -74,7 +74,7 @@ func (d *Decipher) StreamFile(ctx context.Context, fileID uuid.UUID, wr io.Write
 			if totalChunks == 0 {
 				return ErrIDsNotFound
 			}
-			d.logger.Info("stream file finished", zap.String("file_id", fileID.String()), zap.Int("total_chunks", totalChunks))
+			d.logger.Info("stream file finished", "file_id", fileID.String(), "total_chunks", totalChunks)
 			return nil
 		}
 

@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	"go.uber.org/zap"
 )
 
 // trackingWriter - приватная структура, хранящая состояние "успели ли мы записать хоть один байт" (
@@ -36,7 +35,7 @@ func (h *CipherHandler) Download(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.decipher.StreamFile(r.Context(), fileID, tw); err != nil {
-		h.logger.Error("download failed", zap.String("file_id", fileID.String()), zap.Error(err))
+		h.logger.Error("download failed", "file_id", fileID.String(), "error", err)
 
 		// если ни единого байта не записалось - это internal ошибка и можно сразу отдать 500 статускод
 		if !tw.written {
@@ -56,7 +55,7 @@ func (h *CipherHandler) Download(w http.ResponseWriter, r *http.Request) {
 		}
 		conn, _, err := hj.Hijack()
 		if err != nil {
-			h.logger.Error("hijack failed", zap.String("file_id", fileID.String()), zap.Error(err))
+			h.logger.Error("hijack failed", "file_id", fileID.String(), "error", err)
 			return
 		}
 		conn.Close()

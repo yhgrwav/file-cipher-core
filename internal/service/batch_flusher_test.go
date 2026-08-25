@@ -8,8 +8,7 @@ import (
 	"time"
 
 	"file-cipher-core/internal/entity"
-
-	"go.uber.org/zap"
+	"file-cipher-core/pkg/logger"
 )
 
 type fakePendingWriter struct {
@@ -71,7 +70,7 @@ func testFlusherConfig() FlusherConfig {
 
 func TestFlusher_FlushesOnBatchSize(t *testing.T) {
 	writer := &fakePendingWriter{}
-	f := NewFlusher(writer, zap.NewNop(), testFlusherConfig())
+	f := NewFlusher(writer, logger.NewNop(), testFlusherConfig())
 
 	in := make(chan entity.FlushItem)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -105,7 +104,7 @@ func TestFlusher_FlushesOnTimer(t *testing.T) {
 	writer := &fakePendingWriter{}
 	cfg := testFlusherConfig()
 	cfg.BatchSize = 100 // не даём сработать по размеру
-	f := NewFlusher(writer, zap.NewNop(), cfg)
+	f := NewFlusher(writer, logger.NewNop(), cfg)
 
 	in := make(chan entity.FlushItem)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -139,7 +138,7 @@ func TestFlusher_ClosedChannelFlushesTailAndReturns(t *testing.T) {
 	writer := &fakePendingWriter{}
 	cfg := testFlusherConfig()
 	cfg.BatchSize = 100
-	f := NewFlusher(writer, zap.NewNop(), cfg)
+	f := NewFlusher(writer, logger.NewNop(), cfg)
 
 	in := make(chan entity.FlushItem, 2)
 	in <- entity.FlushItem{}
@@ -168,7 +167,7 @@ func TestFlusher_ShutdownFlushesTail(t *testing.T) {
 	cfg := testFlusherConfig()
 	cfg.BatchSize = 100
 	cfg.FlushTime = time.Hour
-	f := NewFlusher(writer, zap.NewNop(), cfg)
+	f := NewFlusher(writer, logger.NewNop(), cfg)
 
 	in := make(chan entity.FlushItem)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -199,7 +198,7 @@ func TestFlusher_RetriesOnWriteFailureThenSucceeds(t *testing.T) {
 	writer := &fakePendingWriter{failN: 2, writeErr: errors.New("boom")}
 	cfg := testFlusherConfig()
 	cfg.BatchSize = 1
-	f := NewFlusher(writer, zap.NewNop(), cfg)
+	f := NewFlusher(writer, logger.NewNop(), cfg)
 
 	in := make(chan entity.FlushItem)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -234,7 +233,7 @@ func TestFlusher_ReturnsErrorAfterExhaustingRetries(t *testing.T) {
 	cfg.BatchSize = 1
 	cfg.WriteRetries = 1
 	cfg.WriteRetryBackoff = time.Millisecond
-	f := NewFlusher(writer, zap.NewNop(), cfg)
+	f := NewFlusher(writer, logger.NewNop(), cfg)
 
 	in := make(chan entity.FlushItem)
 	ctx, cancel := context.WithCancel(context.Background())

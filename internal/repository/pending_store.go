@@ -5,6 +5,7 @@ import (
 	"errors"
 	cfg "file-cipher-core/internal/config"
 	"file-cipher-core/internal/entity"
+	"file-cipher-core/pkg/logger"
 	"fmt"
 	"os"
 	"strconv"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
-	"go.uber.org/zap"
 )
 
 // SUMMARY:
@@ -25,7 +25,7 @@ import (
 
 type PendingStore struct {
 	rdb    *redis.Client
-	logger *zap.Logger
+	logger logger.Logger
 	queue  string // очередь (список) данных, которые ждут обработки
 
 	// курсор, который двигается по списку записей: 0, 1, 2, 3, *cursor*, ..., 8, 9, 10,
@@ -35,7 +35,7 @@ type PendingStore struct {
 	consumer    string
 }
 
-func NewPendingStore(rdb *redis.Client, logger *zap.Logger, cfg cfg.Redis) (*PendingStore, error) {
+func NewPendingStore(rdb *redis.Client, logger logger.Logger, cfg cfg.Redis) (*PendingStore, error) {
 	// каждый инстанс приложения имеет уникальный Hostname
 	host, err := os.Hostname()
 	if err != nil {
@@ -80,7 +80,7 @@ func (p *PendingStore) AddBatch(ctx context.Context, items []entity.FlushItem) (
 
 	// вызываем вставку, в результате которой StringCmd заполняются и в cmds указатели уже не указывают на пустышки, а на полностью заполненные структуры
 	if _, err := pipe.Exec(ctx); err != nil {
-		p.logger.Error("add pending batch failed", zap.Error(err))
+		p.logger.Error("add pending batch failed", "error", err)
 		return nil, fmt.Errorf("add pending batch (%d): %w", len(items), err)
 	}
 
@@ -110,7 +110,7 @@ func (p *PendingStore) Read(ctx context.Context, amount int) ([]entity.PendingIt
 		return nil, nil
 	}
 	if err != nil {
-		p.logger.Error("read pending failed", zap.Error(err))
+		p.logger.Error("read pending failed", "error", err)
 		return nil, fmt.Errorf("read pending (%d): %w", amount, err)
 	}
 
@@ -120,7 +120,7 @@ func (p *PendingStore) Read(ctx context.Context, amount int) ([]entity.PendingIt
 	for _, msg := range msgs {
 		item, err := parsePendingItem(msg)
 		if err != nil {
-			p.logger.Error("parse pending item failed", zap.String("id", msg.ID), zap.Error(err))
+			p.logger.Error("parse pending item failed", "id", msg.ID, "error", err)
 			continue
 		}
 		items = append(items, item)
@@ -132,7 +132,7 @@ func (p *PendingStore) Read(ctx context.Context, amount int) ([]entity.PendingIt
 // Ack - подтверждение о том, что данные обработаны (записаны в Postgres) и их можно удалять
 func (p *PendingStore) Ack(ctx context.Context, ids []string) error {
 	if err := p.rdb.XAck(ctx, p.queue, p.cursorGroup, ids...).Err(); err != nil {
-		p.logger.Error("ack pending failed", zap.Error(err))
+		p.logger.Error("ack pending failed", "error", err)
 		return fmt.Errorf("ack pending(%d): %w", len(ids), err)
 	}
 	return nil
@@ -146,7 +146,7 @@ func (p *PendingStore) CursorInit(ctx context.Context) error {
 	// отлавливается ошибка дубликата и пропускается. в ином случае есть шанс, что при запуске нескольких инстансов одновременно
 	// случится гонка, а явно проверять через XInfoGroups и XGroupCreat - дорого из-за двух раундтрипов
 	if err != nil && !redis.HasErrorPrefix(err, "BUSYGROUP") {
-		p.logger.Error("cursor init failed", zap.Error(err))
+		p.logger.Error("cursor init failed", "error", err)
 		return fmt.Errorf("cursor init: %w", err)
 	}
 	return nil
@@ -163,7 +163,7 @@ func (p *PendingStore) Claim(ctx context.Context, minIdle time.Duration, amount 
 		Count:    int64(amount),
 	}).Result()
 	if err != nil {
-		p.logger.Error("claim pending failed", zap.Error(err))
+		p.logger.Error("claim pending failed", "error", err)
 		return nil, fmt.Errorf("claim pending: %w", err)
 	}
 
@@ -171,7 +171,7 @@ func (p *PendingStore) Claim(ctx context.Context, minIdle time.Duration, amount 
 	for _, msg := range msgs {
 		item, parseErr := parsePendingItem(msg)
 		if parseErr != nil {
-			p.logger.Error("parse claimed item failed", zap.String("id", msg.ID), zap.Error(parseErr))
+			p.logger.Error("parse claimed item failed", "id", msg.ID, "error", parseErr)
 			continue
 		}
 		items = append(items, item)

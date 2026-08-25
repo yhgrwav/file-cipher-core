@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"file-cipher-core/internal/entity"
+	"file-cipher-core/pkg/logger"
 
 	"github.com/google/uuid"
-	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -53,11 +53,11 @@ type Rotator struct {
 	keys    rotationKeyReader
 	flusher *Flusher
 	cursors cursorStore
-	logger  *zap.Logger
+	logger  logger.Logger
 	cfg     RotatorConfig
 }
 
-func NewRotator(data rotationDataReader, keys rotationKeyReader, flusher *Flusher, cursors cursorStore, logger *zap.Logger, cfg RotatorConfig) *Rotator {
+func NewRotator(data rotationDataReader, keys rotationKeyReader, flusher *Flusher, cursors cursorStore, logger logger.Logger, cfg RotatorConfig) *Rotator {
 	return &Rotator{
 		data:    data,
 		keys:    keys,
@@ -69,7 +69,7 @@ func NewRotator(data rotationDataReader, keys rotationKeyReader, flusher *Flushe
 }
 
 func (r *Rotator) Run(ctx context.Context, fileID uuid.UUID) error {
-	r.logger.Info("rotation started", zap.String("file_id", fileID.String()))
+	r.logger.Info("rotation started", "file_id", fileID.String())
 
 	g, ctx := errgroup.WithContext(ctx)
 	jobs := make(chan RotationJob, r.cfg.Workers)
@@ -105,10 +105,10 @@ func (r *Rotator) Run(ctx context.Context, fileID uuid.UUID) error {
 	}
 
 	if err := r.cursors.Delete(ctx, fileID.String()); err != nil {
-		r.logger.Warn("delete cursor failed", zap.String("file_id", fileID.String()), zap.Error(err))
+		r.logger.Warn("delete cursor failed", "file_id", fileID.String(), "error", err)
 	}
 
-	r.logger.Info("rotation finished", zap.String("file_id", fileID.String()))
+	r.logger.Info("rotation finished", "file_id", fileID.String())
 	return nil
 }
 
@@ -197,7 +197,7 @@ func (r *Rotator) produce(ctx context.Context, fileID uuid.UUID, out chan<- Rota
 
 		cursor = ids[len(ids)-1]
 		if err := r.cursors.Save(ctx, op, cursor); err != nil {
-			r.logger.Warn("save cursor failed", zap.String("file_id", op), zap.Error(err))
+			r.logger.Warn("save cursor failed", "file_id", op, "error", err)
 		}
 	}
 }

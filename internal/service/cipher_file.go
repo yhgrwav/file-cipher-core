@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"file-cipher-core/internal/entity"
+	"file-cipher-core/pkg/logger"
 
 	"github.com/google/uuid"
-	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -26,11 +26,11 @@ type CipherConfig struct {
 
 type Cipher struct {
 	flusher *Flusher
-	logger  *zap.Logger
+	logger  logger.Logger
 	cfg     CipherConfig
 }
 
-func NewCipher(flusher *Flusher, logger *zap.Logger, cfg CipherConfig) *Cipher {
+func NewCipher(flusher *Flusher, logger logger.Logger, cfg CipherConfig) *Cipher {
 	return &Cipher{
 		flusher: flusher,
 		logger:  logger,
@@ -45,7 +45,7 @@ type encryptJob struct {
 }
 
 func (c *Cipher) EncryptFile(ctx context.Context, fileID uuid.UUID, src io.Reader) error {
-	c.logger.Info("encrypt file started", zap.String("file_id", fileID.String()))
+	c.logger.Info("encrypt file started", "file_id", fileID.String())
 
 	g, ctx := errgroup.WithContext(ctx)
 	jobs := make(chan encryptJob, c.cfg.Workers)
@@ -76,7 +76,7 @@ func (c *Cipher) EncryptFile(ctx context.Context, fileID uuid.UUID, src io.Reade
 		return err
 	}
 
-	c.logger.Info("encrypt file finished", zap.String("file_id", fileID.String()))
+	c.logger.Info("encrypt file finished", "file_id", fileID.String())
 	return nil
 }
 

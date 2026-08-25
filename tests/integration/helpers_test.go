@@ -15,10 +15,10 @@ import (
 
 	cfgpkg "file-cipher-core/internal/config"
 	"file-cipher-core/internal/repository"
+	"file-cipher-core/pkg/logger"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
-	"go.uber.org/zap"
 )
 
 func envOr(key, def string) string {
@@ -75,7 +75,7 @@ func newTestPendingStore(t *testing.T, rdb *redis.Client) *repository.PendingSto
 	t.Helper()
 	suffix := fmt.Sprintf("%s-%d", t.Name(), time.Now().UnixNano())
 
-	store, err := repository.NewPendingStore(rdb, zap.NewNop(), cfgpkg.Redis{
+	store, err := repository.NewPendingStore(rdb, logger.NewNop(), cfgpkg.Redis{
 		Queue:      "test:pending:" + suffix,
 		CursorName: "test:group:" + suffix,
 		ReadBlock:  200 * time.Millisecond,

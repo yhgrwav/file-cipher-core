@@ -10,8 +10,7 @@ import (
 	"file-cipher-core/internal/entity"
 	"file-cipher-core/internal/repository"
 	"file-cipher-core/internal/service"
-
-	"go.uber.org/zap"
+	"file-cipher-core/pkg/logger"
 )
 
 func workerCfg() service.PendingWorkerConfig {
@@ -37,7 +36,7 @@ func TestPendingWorker_EndToEnd_ReadWritesToPostgres(t *testing.T) {
 	keyRepo := repository.NewKeyRepository(keyPool)
 	dataRepo := repository.NewDataRepository(dataPool)
 
-	worker := service.NewPendingWorker(store, dataRepo, keyRepo, zap.NewNop(), workerCfg())
+	worker := service.NewPendingWorker(store, dataRepo, keyRepo, logger.NewNop(), workerCfg())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -110,7 +109,7 @@ func TestPendingWorker_ClaimRecoversAfterSimulatedCrash(t *testing.T) {
 
 	time.Sleep(60 * time.Millisecond) // пережидаем ClaimMinIdle
 
-	worker := service.NewPendingWorker(store, dataRepo, keyRepo, zap.NewNop(), workerCfg())
+	worker := service.NewPendingWorker(store, dataRepo, keyRepo, logger.NewNop(), workerCfg())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() { _ = worker.Run(ctx) }()
@@ -130,7 +129,7 @@ func TestFlusher_WritesIntoPendingStore(t *testing.T) {
 	rdb := newTestRedis(t)
 	store := newTestPendingStore(t, rdb)
 
-	flusher := service.NewFlusher(store, zap.NewNop(), service.FlusherConfig{
+	flusher := service.NewFlusher(store, logger.NewNop(), service.FlusherConfig{
 		BatchSize:            10,
 		FlushTime:            100 * time.Millisecond,
 		ShutdownFlushTimeout: 2 * time.Second,

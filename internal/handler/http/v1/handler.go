@@ -3,11 +3,11 @@ package v1
 import (
 	"context"
 	"file-cipher-core/internal/handler/http/middleware"
+	"file-cipher-core/pkg/logger"
 	"io"
 	"net/http"
 
 	"github.com/google/uuid"
-	"go.uber.org/zap"
 )
 
 type Cipher interface {
@@ -26,10 +26,10 @@ type CipherHandler struct {
 	cipher   Cipher
 	rotator  Rotator
 	decipher Decipher
-	logger   *zap.Logger
+	logger   logger.Logger
 }
 
-func NewCipherHandler(cipher Cipher, rotator Rotator, decipher Decipher, logger *zap.Logger) *CipherHandler {
+func NewCipherHandler(cipher Cipher, rotator Rotator, decipher Decipher, logger logger.Logger) *CipherHandler {
 	return &CipherHandler{
 		cipher:   cipher,
 		rotator:  rotator,

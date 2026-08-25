@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	"go.uber.org/zap"
 )
 
 func (h *CipherHandler) Rotate(w http.ResponseWriter, r *http.Request) {
@@ -15,7 +14,7 @@ func (h *CipherHandler) Rotate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.rotator.Run(r.Context(), fileID); err != nil {
-		h.logger.Error("rotate failed", zap.String("file_id", fileID.String()), zap.Error(err))
+		h.logger.Error("rotate failed", "file_id", fileID.String(), "error", err)
 		http.Error(w, "rotation failed", http.StatusInternalServerError)
 		return
 	}

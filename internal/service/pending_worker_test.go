@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"file-cipher-core/internal/entity"
+	"file-cipher-core/pkg/logger"
 
 	"github.com/google/uuid"
-	"go.uber.org/zap"
 )
 
 type fakeKeysRepo struct {
@@ -134,7 +134,7 @@ func TestPendingWorker_ProcessAcksCorrectIDs(t *testing.T) {
 	store := &fakePendingStore{}
 	keys := &fakeKeysRepo{}
 	data := &fakeDataRepo{}
-	w := NewPendingWorker(store, data, keys, zap.NewNop(), testPendingWorkerConfig())
+	w := NewPendingWorker(store, data, keys, logger.NewNop(), testPendingWorkerConfig())
 
 	items := []entity.PendingItem{testPendingItem("1-0"), testPendingItem("2-0")}
 
@@ -162,7 +162,7 @@ func TestPendingWorker_PartialFailureDoesNotAck(t *testing.T) {
 	cfg := testPendingWorkerConfig()
 	cfg.WriteRetries = 1
 	cfg.WriteRetryBackoff = time.Millisecond
-	w := NewPendingWorker(store, data, keys, zap.NewNop(), cfg)
+	w := NewPendingWorker(store, data, keys, logger.NewNop(), cfg)
 
 	items := []entity.PendingItem{testPendingItem("1-0")}
 
@@ -182,7 +182,7 @@ func TestPendingWorker_RetriesTransientWriteFailure(t *testing.T) {
 	cfg := testPendingWorkerConfig()
 	cfg.WriteRetries = 3
 	cfg.WriteRetryBackoff = time.Millisecond
-	w := NewPendingWorker(store, data, keys, zap.NewNop(), cfg)
+	w := NewPendingWorker(store, data, keys, logger.NewNop(), cfg)
 
 	items := []entity.PendingItem{testPendingItem("1-0")}
 
@@ -199,7 +199,7 @@ func TestPendingWorker_ReadLoopProcessesThenStopsOnCancel(t *testing.T) {
 	store := &fakePendingStore{readOnce: []entity.PendingItem{testPendingItem("1-0")}}
 	keys := &fakeKeysRepo{}
 	data := &fakeDataRepo{}
-	w := NewPendingWorker(store, data, keys, zap.NewNop(), testPendingWorkerConfig())
+	w := NewPendingWorker(store, data, keys, logger.NewNop(), testPendingWorkerConfig())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)

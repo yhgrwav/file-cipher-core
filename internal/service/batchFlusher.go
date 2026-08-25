@@ -6,8 +6,7 @@ import (
 	"time"
 
 	"file-cipher-core/internal/entity"
-
-	"go.uber.org/zap"
+	"file-cipher-core/pkg/logger"
 )
 
 // SUMMARY:
@@ -40,11 +39,11 @@ type FlusherConfig struct {
 // который по определённому кулдауну вызывает flush. в зависимости передаётся оба репозитория и логгер, ничего необычного
 type Flusher struct {
 	pendingRepo PendingWriter
-	logger      *zap.Logger
+	logger      logger.Logger
 	cfg         FlusherConfig
 }
 
-func NewFlusher(pendingRepo PendingWriter, logger *zap.Logger, cfg FlusherConfig) *Flusher {
+func NewFlusher(pendingRepo PendingWriter, logger logger.Logger, cfg FlusherConfig) *Flusher {
 	return &Flusher{
 		pendingRepo: pendingRepo,
 		logger:      logger,
@@ -80,7 +79,7 @@ func (f *Flusher) Run(ctx context.Context, in <-chan entity.FlushItem) error {
 				err := f.write(flushCtx, items)
 				cancel()
 				if err != nil {
-					f.logger.Error("flush tail on shutdown failed", zap.Int("lost", len(items)), zap.Error(err))
+					f.logger.Error("flush tail on shutdown failed", "lost", len(items), "error", err)
 				}
 			}
 			f.logger.Info("Flusher worker done")
@@ -115,7 +114,7 @@ func (f *Flusher) write(ctx context.Context, items []entity.FlushItem) error {
 	}); err != nil {
 		return fmt.Errorf("flush pending batch (%d): %w", len(items), err)
 	}
-	f.logger.Debug("batch flushed to pending", zap.Int("count", len(items)))
+	f.logger.Debug("batch flushed to pending", "count", len(items))
 	return nil
 }
 

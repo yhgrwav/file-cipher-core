@@ -18,7 +18,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
-	"go.uber.org/zap"
 )
 
 const shutdownTimeout = 10 * time.Second
@@ -42,14 +41,14 @@ func main() {
 
 	keyPool, err := newPool(ctx, cfg.KeyDB)
 	if err != nil {
-		logger.Fatal("connect key db", zap.Error(err))
+		logger.Fatal("connect key db", "error", err)
 	}
 	defer keyPool.Close()
 	keyRepo := repository.NewKeyRepository(keyPool)
 
 	dataPool, err := newPool(ctx, cfg.DataDB)
 	if err != nil {
-		logger.Fatal("connect data db", zap.Error(err))
+		logger.Fatal("connect data db", "error", err)
 	}
 	defer dataPool.Close()
 	dataRepo := repository.NewDataRepository(dataPool)
@@ -60,7 +59,7 @@ func main() {
 		DB:       cfg.Redis.DB,
 	})
 	if err := rdb.Ping(ctx).Err(); err != nil {
-		logger.Fatal("connect redis", zap.Error(err))
+		logger.Fatal("connect redis", "error", err)
 	}
 	defer func() {
 		_ = rdb.Close()
@@ -69,10 +68,10 @@ func main() {
 
 	pendingStore, err := repository.NewPendingStore(rdb, logger, cfg.Redis)
 	if err != nil {
-		logger.Fatal("init pending store", zap.Error(err))
+		logger.Fatal("init pending store", "error", err)
 	}
 	if err := pendingStore.CursorInit(ctx); err != nil {
-		logger.Fatal("init pending cursor", zap.Error(err))
+		logger.Fatal("init pending cursor", "error", err)
 	}
 
 	logger.Info("dependencies connected")
@@ -94,7 +93,7 @@ func main() {
 	})
 	go func() {
 		if err := pendingWorker.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-			logger.Error("pending worker stopped", zap.Error(err))
+			logger.Error("pending worker stopped", "error", err)
 		}
 	}()
 
@@ -135,14 +134,14 @@ func main() {
 	case <-ctx.Done():
 		logger.Info("shutdown signal received")
 	case err := <-errCh:
-		logger.Error("server failed", zap.Error(err))
+		logger.Error("server failed", "error", err)
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		logger.Error("server shutdown", zap.Error(err))
+		logger.Error("server shutdown", "error", err)
 	}
 
 	logger.Info("stopped gracefully")
@@ -171,11 +170,8 @@ func newPool(ctx context.Context, dbCfg config.DB) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
-func serve(srv *http.Server, name string, lg *zap.Logger, errCh chan<- error) {
-	lg.Info("http server listening",
-		zap.String("service", name),
-		zap.String("addr", srv.Addr),
-	)
+func serve(srv *http.Server, name string, logger lg.Logger, errCh chan<- error) {
+	logger.Info("http server listening", "service", name, "addr", srv.Addr)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		errCh <- fmt.Errorf("%s server: %w", name, err)
 	}

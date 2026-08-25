@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"file-cipher-core/internal/entity"
+	"file-cipher-core/pkg/logger"
 
-	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -49,11 +49,11 @@ type PendingWorker struct {
 	pdb    PendingStore
 	data   DataRepo
 	keys   KeysRepo
-	logger *zap.Logger
+	logger logger.Logger
 	cfg    PendingWorkerConfig
 }
 
-func NewPendingWorker(pdb PendingStore, data DataRepo, keys KeysRepo, logger *zap.Logger, cfg PendingWorkerConfig) *PendingWorker {
+func NewPendingWorker(pdb PendingStore, data DataRepo, keys KeysRepo, logger logger.Logger, cfg PendingWorkerConfig) *PendingWorker {
 	return &PendingWorker{
 		pdb:    pdb,
 		data:   data,
@@ -90,7 +90,7 @@ func (p *PendingWorker) readLoop(ctx context.Context) error {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			p.logger.Error("pending read failed", zap.Error(err))
+			p.logger.Error("pending read failed", "error", err)
 			continue
 		}
 		if len(items) == 0 {
@@ -98,7 +98,7 @@ func (p *PendingWorker) readLoop(ctx context.Context) error {
 		}
 
 		if err := p.process(ctx, items); err != nil {
-			p.logger.Error("pending process failed", zap.Int("count", len(items)), zap.Error(err))
+			p.logger.Error("pending process failed", "count", len(items), "error", err)
 		}
 	}
 }
@@ -115,10 +115,10 @@ func (p *PendingWorker) claimLoop(ctx context.Context) error {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			p.logger.Error("pending claim failed", zap.Error(err))
+			p.logger.Error("pending claim failed", "error", err)
 		} else if len(items) > 0 {
 			if err := p.process(ctx, items); err != nil {
-				p.logger.Error("pending claim process failed", zap.Int("count", len(items)), zap.Error(err))
+				p.logger.Error("pending claim process failed", "count", len(items), "error", err)
 			}
 		}
 
@@ -161,6 +161,6 @@ func (p *PendingWorker) process(ctx context.Context, items []entity.PendingItem)
 	if err := p.pdb.Ack(ctx, ids); err != nil {
 		return fmt.Errorf("ack pending batch (%d): %w", len(items), err)
 	}
-	p.logger.Debug("pending batch flushed to postgres", zap.Int("count", len(items)))
+	p.logger.Debug("pending batch flushed to postgres", "count", len(items))
 	return nil
 }

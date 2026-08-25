@@ -2,21 +2,20 @@ package middleware
 
 import (
 	"bufio"
+	"file-cipher-core/pkg/logger"
 	"fmt"
 	"net"
 	"net/http"
 	"time"
-
-	"go.uber.org/zap"
 )
 
-func Logging(logger *zap.Logger) func(http.Handler) http.Handler {
+func Logging(logger logger.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 			next.ServeHTTP(rec, r)
-			logger.Info("request", zap.String("method", r.Method), zap.String("path", r.URL.Path), zap.Int("status", rec.status), zap.Duration("duration", time.Since(start)))
+			logger.Info("request", "method", r.Method, "path", r.URL.Path, "status", rec.status, "duration", time.Since(start))
 		})
 	}
 }
