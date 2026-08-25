@@ -1,6 +1,8 @@
 package v1
 
 import (
+	"errors"
+	"file-cipher-core/internal/service"
 	"fmt"
 	"net/http"
 
@@ -37,8 +39,12 @@ func (h *CipherHandler) Download(w http.ResponseWriter, r *http.Request) {
 	if err := h.decipher.StreamFile(r.Context(), fileID, tw); err != nil {
 		h.logger.Error("download failed", "file_id", fileID.String(), "error", err)
 
-		// если ни единого байта не записалось - это internal ошибка и можно сразу отдать 500 статускод
+		// если Write() не вызвался - заголовки не отправлены и можно отдать честный ответ ошибки без костыля Hijack()
 		if !tw.written {
+			if errors.Is(err, service.ErrIDsNotFound) {
+				http.Error(w, "File not found", http.StatusNotFound)
+				return
+			}
 			http.Error(w, "download failed", http.StatusInternalServerError)
 			return
 		}

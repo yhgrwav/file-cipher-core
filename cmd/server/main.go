@@ -76,20 +76,25 @@ func main() {
 
 	logger.Info("dependencies connected")
 
+	retryCfg := service.RetryConfig{
+		Attempts: cfg.Retry.Attempts,
+		Backoff:  cfg.Retry.Backoff,
+	}
+
 	flusher := service.NewFlusher(pendingStore, logger, service.FlusherConfig{
 		BatchSize:            cfg.Flusher.BatchSize,
 		FlushTime:            cfg.Flusher.FlushTime,
 		ShutdownFlushTimeout: cfg.Flusher.ShutdownFlushTimeout,
-		WriteRetries:         cfg.Flusher.WriteRetries,
-		WriteRetryBackoff:    cfg.Flusher.WriteRetryBackoff,
+		Retry:                retryCfg,
 	})
 
 	pendingWorker := service.NewPendingWorker(pendingStore, dataRepo, keyRepo, logger, service.PendingWorkerConfig{
-		Amount:            cfg.Pending.Amount,
-		ClaimInterval:     cfg.Pending.ClaimInterval,
-		ClaimMinIdle:      cfg.Pending.ClaimMinIdle,
-		WriteRetries:      cfg.Pending.WriteRetries,
-		WriteRetryBackoff: cfg.Pending.WriteRetryBackoff,
+		Amount:         cfg.Pending.Amount,
+		ClaimInterval:  cfg.Pending.ClaimInterval,
+		ClaimMinIdle:   cfg.Pending.ClaimMinIdle,
+		Retry:          retryCfg,
+		ReadBackoff:    cfg.Pending.ReadBackoff,
+		ReadBackoffMax: cfg.Pending.ReadBackoffMax,
 	})
 	go func() {
 		if err := pendingWorker.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
@@ -105,18 +110,12 @@ func main() {
 	rotator := service.NewRotator(dataRepo, keyRepo, flusher, cursors, logger, service.RotatorConfig{
 		PageSize: cfg.Rotation.PageSize,
 		Workers:  cfg.Rotation.Workers,
-		Retry: service.RetryConfig{
-			Attempts: cfg.Rotation.RetryAttempts,
-			Backoff:  cfg.Rotation.RetryBackoff,
-		},
+		Retry:    retryCfg,
 	})
 
 	decipher := service.NewDecipher(service.DecipherConfig{
 		PageSize: cfg.Decipher.PageSize,
-		Retry: service.RetryConfig{
-			Attempts: cfg.Decipher.RetryAttempts,
-			Backoff:  cfg.Decipher.RetryBackoff,
-		},
+		Retry:    retryCfg,
 	}, logger, dataRepo, keyRepo)
 
 	handler := v1.NewCipherHandler(cipher, rotator, decipher, logger)

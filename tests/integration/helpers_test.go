@@ -3,7 +3,7 @@
 // Интеграционные тесты гоняются против реального Redis/Postgres, поднятых через docker-compose
 // (key-db на 5433, data-db на 5434, redis на 6379 - именно так они проброшены наружу в docker-compose.yml).
 // Запуск: docker compose up -d key-db data-db redis migrate-keys migrate-data
-//         go test -tags=integration ./tests/integration/... -v
+// go test -tags=integration ./tests/integration/... -v
 package integration
 
 import (

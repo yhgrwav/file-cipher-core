@@ -63,8 +63,7 @@ func testFlusherConfig() FlusherConfig {
 		BatchSize:            3,
 		FlushTime:            50 * time.Millisecond,
 		ShutdownFlushTimeout: 2 * time.Second,
-		WriteRetries:         2,
-		WriteRetryBackoff:    5 * time.Millisecond,
+		Retry:                RetryConfig{Attempts: 2, Backoff: 5 * time.Millisecond},
 	}
 }
 
@@ -231,8 +230,7 @@ func TestFlusher_ReturnsErrorAfterExhaustingRetries(t *testing.T) {
 	writer := &fakePendingWriter{failN: 1000, writeErr: writeErr}
 	cfg := testFlusherConfig()
 	cfg.BatchSize = 1
-	cfg.WriteRetries = 1
-	cfg.WriteRetryBackoff = time.Millisecond
+	cfg.Retry = RetryConfig{Attempts: 1, Backoff: time.Millisecond}
 	f := NewFlusher(writer, logger.NewNop(), cfg)
 
 	in := make(chan entity.FlushItem)

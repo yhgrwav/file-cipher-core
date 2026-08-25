@@ -27,11 +27,8 @@ type FlusherConfig struct {
 	// ShutdownFlushTimeout - таймаут на дозапись данных при отмене контекста
 	ShutdownFlushTimeout time.Duration
 
-	// WriteRetries - сколько раз повторить запись батча при ошибке БД
-	WriteRetries int
-
-	// WriteRetryBackoff - базовая пауза между повторами
-	WriteRetryBackoff time.Duration
+	// Retry - сколько раз повторить запись батча при ошибке БД и пауза между повторами
+	Retry RetryConfig
 }
 
 // Flusher решает проблему записи данных в базу, базовый паттерн, задаётся BatchSize и FlushTime -> если батч переполнился -
@@ -108,7 +105,7 @@ func (f *Flusher) Run(ctx context.Context, in <-chan entity.FlushItem) error {
 
 // write кладёт пачку в Redis
 func (f *Flusher) write(ctx context.Context, items []entity.FlushItem) error {
-	if err := withRetry(ctx, f.cfg.WriteRetries, f.cfg.WriteRetryBackoff, func() error {
+	if err := retryDo(ctx, f.cfg.Retry, func() error {
 		_, err := f.pendingRepo.AddBatch(ctx, items)
 		return err
 	}); err != nil {

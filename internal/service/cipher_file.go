@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -96,7 +97,7 @@ func (c *Cipher) read(ctx context.Context, fileID uuid.UUID, src io.Reader, out 
 			}
 		}
 		if err != nil {
-			if err == io.EOF || err == io.ErrUnexpectedEOF {
+			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 				return nil
 			}
 			return fmt.Errorf("read chunk: %w", err)

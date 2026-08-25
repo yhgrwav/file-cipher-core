@@ -15,11 +15,10 @@ import (
 
 func workerCfg() service.PendingWorkerConfig {
 	return service.PendingWorkerConfig{
-		Amount:            100,
-		ClaimInterval:     100 * time.Millisecond,
-		ClaimMinIdle:      50 * time.Millisecond,
-		WriteRetries:      3,
-		WriteRetryBackoff: 50 * time.Millisecond,
+		Amount:        100,
+		ClaimInterval: 100 * time.Millisecond,
+		ClaimMinIdle:  50 * time.Millisecond,
+		Retry:         service.RetryConfig{Attempts: 3, Backoff: 50 * time.Millisecond},
 	}
 }
 
@@ -133,8 +132,7 @@ func TestFlusher_WritesIntoPendingStore(t *testing.T) {
 		BatchSize:            10,
 		FlushTime:            100 * time.Millisecond,
 		ShutdownFlushTimeout: 2 * time.Second,
-		WriteRetries:         2,
-		WriteRetryBackoff:    50 * time.Millisecond,
+		Retry:                service.RetryConfig{Attempts: 2, Backoff: 50 * time.Millisecond},
 	})
 
 	in := make(chan entity.FlushItem)

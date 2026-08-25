@@ -252,30 +252,3 @@ func rotationWorker(ctx context.Context, in <-chan RotationJob, out chan<- entit
 		}
 	}
 }
-
-type RetryConfig struct {
-	Attempts int
-	Backoff  time.Duration
-}
-
-// retryDo - хелпер, который делает n ретраев в принимаемой функции
-func retryDo(ctx context.Context, cfg RetryConfig, fn func() error) error {
-	var lastErr error
-	for attempt := 0; attempt <= cfg.Attempts; attempt++ {
-		if attempt > 0 {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(cfg.Backoff):
-			}
-		}
-		lastErr = fn()
-		if lastErr == nil {
-			return nil
-		}
-		if ctx.Err() != nil {
-			return lastErr
-		}
-	}
-	return fmt.Errorf("retry exhausted after %d attempts: %w", cfg.Attempts+1, lastErr)
-}

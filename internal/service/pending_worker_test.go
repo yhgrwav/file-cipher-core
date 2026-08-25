@@ -122,11 +122,10 @@ func testPendingItem(id string) entity.PendingItem {
 
 func testPendingWorkerConfig() PendingWorkerConfig {
 	return PendingWorkerConfig{
-		Amount:            100,
-		ClaimInterval:     time.Hour,
-		ClaimMinIdle:      time.Minute,
-		WriteRetries:      2,
-		WriteRetryBackoff: 5 * time.Millisecond,
+		Amount:        100,
+		ClaimInterval: time.Hour,
+		ClaimMinIdle:  time.Minute,
+		Retry:         RetryConfig{Attempts: 2, Backoff: 5 * time.Millisecond},
 	}
 }
 
@@ -160,8 +159,7 @@ func TestPendingWorker_PartialFailureDoesNotAck(t *testing.T) {
 	keys := &fakeKeysRepo{}
 	data := &fakeDataRepo{failN: 1000, saveErr: errors.New("pg down")}
 	cfg := testPendingWorkerConfig()
-	cfg.WriteRetries = 1
-	cfg.WriteRetryBackoff = time.Millisecond
+	cfg.Retry = RetryConfig{Attempts: 1, Backoff: time.Millisecond}
 	w := NewPendingWorker(store, data, keys, logger.NewNop(), cfg)
 
 	items := []entity.PendingItem{testPendingItem("1-0")}
@@ -180,8 +178,7 @@ func TestPendingWorker_RetriesTransientWriteFailure(t *testing.T) {
 	keys := &fakeKeysRepo{failN: 2, saveErr: errors.New("transient")}
 	data := &fakeDataRepo{}
 	cfg := testPendingWorkerConfig()
-	cfg.WriteRetries = 3
-	cfg.WriteRetryBackoff = time.Millisecond
+	cfg.Retry = RetryConfig{Attempts: 3, Backoff: time.Millisecond}
 	w := NewPendingWorker(store, data, keys, logger.NewNop(), cfg)
 
 	items := []entity.PendingItem{testPendingItem("1-0")}

@@ -18,6 +18,13 @@ type Config struct {
 	Rotation Rotation `envPrefix:"ROTATION_"`
 	Decipher Decipher `envPrefix:"DECIPHER_"`
 	Pending  Pending  `envPrefix:"PENDING_"`
+	Retry    Retry    `envPrefix:"RETRY_"`
+}
+
+// Retry - общие для всех сервисов настройки повторов при ошибках БД/Redis
+type Retry struct {
+	Attempts int           `env:"ATTEMPTS" envDefault:"3"`
+	Backoff  time.Duration `env:"BACKOFF" envDefault:"100ms"`
 }
 
 type Cipher struct {
@@ -39,21 +46,15 @@ type Flusher struct {
 	BatchSize            int           `env:"BATCH_SIZE" envDefault:"1000"`
 	FlushTime            time.Duration `env:"FLUSH_TIME" envDefault:"200ms"`
 	ShutdownFlushTimeout time.Duration `env:"SHUTDOWN_FLUSH_TIMEOUT" envDefault:"5s"`
-	WriteRetries         int           `env:"WRITE_RETRIES" envDefault:"3"`
-	WriteRetryBackoff    time.Duration `env:"WRITE_RETRY_BACKOFF" envDefault:"100ms"`
 }
 
 type Rotation struct {
-	PageSize      int           `env:"PAGE_SIZE" envDefault:"1000"`
-	Workers       int           `env:"WORKERS" envDefault:"8"`
-	RetryAttempts int           `env:"RETRY_ATTEMPTS" envDefault:"3"`
-	RetryBackoff  time.Duration `env:"RETRY_BACKOFF" envDefault:"100ms"`
+	PageSize int `env:"PAGE_SIZE" envDefault:"1000"`
+	Workers  int `env:"WORKERS" envDefault:"8"`
 }
 
 type Decipher struct {
-	PageSize      int           `env:"PAGE_SIZE" envDefault:"1000"`
-	RetryAttempts int           `env:"RETRY_ATTEMPTS" envDefault:"3"`
-	RetryBackoff  time.Duration `env:"RETRY_BACKOFF" envDefault:"100ms"`
+	PageSize int `env:"PAGE_SIZE" envDefault:"1000"`
 }
 
 type Pending struct {
@@ -66,11 +67,11 @@ type Pending struct {
 	// ClaimMinIdle - сколько запись должна провисеть в PEL без Ack, чтобы считаться зависшей
 	ClaimMinIdle time.Duration `env:"CLAIM_MIN_IDLE" envDefault:"1m"`
 
-	// WriteRetries - сколько раз повторить запись батча в Postgres при ошибке
-	WriteRetries int `env:"WRITE_RETRIES" envDefault:"3"`
+	// ReadBackoff - стартовая пауза после неудачного чтения из Redis
+	ReadBackoff time.Duration `env:"READ_BACKOFF" envDefault:"100ms"`
 
-	// WriteRetryBackoff - базовая пауза между повторами записи в Postgres
-	WriteRetryBackoff time.Duration `env:"WRITE_RETRY_BACKOFF" envDefault:"100ms"`
+	// ReadBackoffMax - потолок, до которого растёт эта пауза
+	ReadBackoffMax time.Duration `env:"READ_BACKOFF_MAX" envDefault:"5s"`
 }
 
 type DB struct {

@@ -2,8 +2,8 @@ package middleware
 
 import (
 	"bufio"
+	"errors"
 	"file-cipher-core/pkg/logger"
-	"fmt"
 	"net"
 	"net/http"
 	"time"
@@ -67,7 +67,7 @@ func (s *statusRecorder) Flush() {
 func (s *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	hj, ok := s.ResponseWriter.(http.Hijacker)
 	if !ok {
-		return nil, nil, fmt.Errorf("resp writer does not implement http.Hijacker ✌(-‿-)✌")
+		return nil, nil, errors.New("resp writer does not implement http.Hijacker ✌(-‿-)✌")
 	}
 	return hj.Hijack()
 }

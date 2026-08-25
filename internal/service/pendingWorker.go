@@ -35,11 +35,14 @@ type PendingWorkerConfig struct {
 	// ClaimMinIdle - сколько запись должна провисеть в PEL без Ack, чтобы считаться зависшей
 	ClaimMinIdle time.Duration
 
-	// WriteRetries - сколько раз повторить запись батча в Postgres при ошибке
-	WriteRetries int
+	// Retry - сколько раз повторить запись батча в Postgres при ошибке и пауза между повторами
+	Retry RetryConfig
 
-	// WriteRetryBackoff - базовая пауза между повторами записи в Postgres
-	WriteRetryBackoff time.Duration
+	// ReadBackoff - стартовая пауза после неудачного чтения из Redis
+	ReadBackoff time.Duration
+
+	// ReadBackoffMax - потолок, до которого растёт эта пауза
+	ReadBackoffMax time.Duration
 }
 
 // PendingWorker дописывает в Postgres то, что Flusher уже надёжно сложил в Redis: читает батчами из
@@ -80,6 +83,8 @@ func (p *PendingWorker) Run(ctx context.Context) error {
 // readLoop вычитывает новые записи. Read блокируется на стороне Redis (readBlock), поэтому отдельный
 // тикер здесь не нужен - пустой ответ просто означает, что Redis прождал впустую и вернул управление.
 func (p *PendingWorker) readLoop(ctx context.Context) error {
+	backoff := loopBackoff{base: p.cfg.ReadBackoff, max: p.cfg.ReadBackoffMax}
+
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -91,8 +96,13 @@ func (p *PendingWorker) readLoop(ctx context.Context) error {
 				return ctx.Err()
 			}
 			p.logger.Error("pending read failed", "error", err)
+			if !backoff.wait(ctx) {
+				return ctx.Err()
+			}
 			continue
 		}
+		backoff.reset()
+
 		if len(items) == 0 {
 			continue
 		}
@@ -145,12 +155,12 @@ func (p *PendingWorker) process(ctx context.Context, items []entity.PendingItem)
 
 	g, gCtx := errgroup.WithContext(ctx)
 	g.Go(func() error {
-		return withRetry(gCtx, p.cfg.WriteRetries, p.cfg.WriteRetryBackoff, func() error {
+		return retryDo(gCtx, p.cfg.Retry, func() error {
 			return p.keys.SaveKeys(gCtx, keys)
 		})
 	})
 	g.Go(func() error {
-		return withRetry(gCtx, p.cfg.WriteRetries, p.cfg.WriteRetryBackoff, func() error {
+		return retryDo(gCtx, p.cfg.Retry, func() error {
 			return p.data.SaveData(gCtx, data)
 		})
 	})
