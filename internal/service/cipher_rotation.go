@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"file-cipher-core/internal/crypto"
 	"fmt"
 	"time"
 
@@ -37,7 +38,7 @@ type (
 	}
 )
 
-type RotationJob struct {
+type rotationJob struct {
 	Current entity.ChunkData
 	OldKey  entity.ChunkKey
 }
@@ -72,7 +73,7 @@ func (r *Rotator) Run(ctx context.Context, fileID uuid.UUID) error {
 	r.logger.Info("rotation started", "file_id", fileID.String())
 
 	g, gctx := errgroup.WithContext(ctx)
-	jobs := make(chan RotationJob, r.cfg.Workers)
+	jobs := make(chan rotationJob, r.cfg.Workers)
 	items := make(chan entity.FlushItem, r.cfg.Workers)
 
 	g.Go(func() error {
@@ -136,7 +137,7 @@ func (r *Rotator) deleteOldVersions(ctx context.Context, fileID uuid.UUID) error
 	}
 }
 
-func (r *Rotator) produce(ctx context.Context, fileID uuid.UUID, out chan<- RotationJob) error {
+func (r *Rotator) produce(ctx context.Context, fileID uuid.UUID, out chan<- rotationJob) error {
 	op := fileID.String()
 
 	cursor, ok, err := r.cursors.Load(ctx, op)
@@ -191,7 +192,7 @@ func (r *Rotator) produce(ctx context.Context, fileID uuid.UUID, out chan<- Rota
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case out <- RotationJob{Current: chunk, OldKey: oldKey}:
+			case out <- rotationJob{Current: chunk, OldKey: oldKey}:
 			}
 		}
 
@@ -202,7 +203,7 @@ func (r *Rotator) produce(ctx context.Context, fileID uuid.UUID, out chan<- Rota
 	}
 }
 
-func rotationWorker(ctx context.Context, in <-chan RotationJob, out chan<- entity.FlushItem) error {
+func rotationWorker(ctx context.Context, in <-chan rotationJob, out chan<- entity.FlushItem) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -212,15 +213,15 @@ func rotationWorker(ctx context.Context, in <-chan RotationJob, out chan<- entit
 				return nil
 			}
 
-			plain, err := Decrypt(job.OldKey.Key, job.Current.Ciphertext, job.Current.Nonce)
+			plain, err := crypto.Decrypt(job.OldKey.Key, job.Current.Ciphertext, job.Current.Nonce)
 			if err != nil {
 				return fmt.Errorf("decrypt chunk %s: %w", job.Current.UUID, err)
 			}
-			newKey, err := GenerateKey()
+			newKey, err := crypto.GenerateKey()
 			if err != nil {
 				return fmt.Errorf("generate key for chunk %s: %w", job.Current.UUID, err)
 			}
-			ciphertext, nonce, err := Encrypt(newKey, plain)
+			ciphertext, nonce, err := crypto.Encrypt(newKey, plain)
 			if err != nil {
 				return fmt.Errorf("encrypt chunk %s: %w", job.Current.UUID, err)
 			}

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"file-cipher-core/internal/crypto"
 	"fmt"
 	"io"
 
@@ -165,7 +166,7 @@ func (d *Decipher) decryptChunk(id uuid.UUID, chunk entity.ChunkData, key entity
 		return nil, fmt.Errorf("version mismatch for chunk %s: key=%d data=%d", id, key.Version, chunk.Version)
 	}
 
-	plain, err := Decrypt(key.Key, chunk.Ciphertext, chunk.Nonce)
+	plain, err := crypto.Decrypt(key.Key, chunk.Ciphertext, chunk.Nonce)
 	if err != nil {
 		return nil, fmt.Errorf("decrypt chunk %s: %w", id, err)
 	}

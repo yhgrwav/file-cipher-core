@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"file-cipher-core/internal/crypto"
 	"fmt"
 	"io"
 	"time"
@@ -115,11 +116,11 @@ func encryptWorker(ctx context.Context, in <-chan encryptJob, out chan<- entity.
 				return nil
 			}
 
-			key, err := GenerateKey()
+			key, err := crypto.GenerateKey()
 			if err != nil {
 				return fmt.Errorf("generate key for chunk %s: %w", job.chunkID, err)
 			}
-			ciphertext, nonce, err := Encrypt(key, job.plaintext)
+			ciphertext, nonce, err := crypto.Encrypt(key, job.plaintext)
 			if err != nil {
 				return fmt.Errorf("encrypt chunk %s: %w", job.chunkID, err)
 			}
