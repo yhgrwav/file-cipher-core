@@ -43,10 +43,10 @@ type DecipherConfig struct {
 	Retry    RetryConfig
 }
 
-func NewDecipher(cfg DecipherConfig, logger logger.Logger, data decipherDataReader, keys decipherKeyReader) *Decipher {
+func NewDecipher(cfg DecipherConfig, log logger.Logger, data decipherDataReader, keys decipherKeyReader) *Decipher {
 	return &Decipher{
 		config: cfg,
-		logger: logger,
+		logger: log,
 		data:   data,
 		keys:   keys,
 	}

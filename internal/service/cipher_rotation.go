@@ -58,13 +58,13 @@ type Rotator struct {
 	cfg     RotatorConfig
 }
 
-func NewRotator(data rotationDataReader, keys rotationKeyReader, flusher *Flusher, cursors cursorStore, logger logger.Logger, cfg RotatorConfig) *Rotator {
+func NewRotator(data rotationDataReader, keys rotationKeyReader, flusher *Flusher, cursors cursorStore, log logger.Logger, cfg RotatorConfig) *Rotator {
 	return &Rotator{
 		data:    data,
 		keys:    keys,
 		flusher: flusher,
 		cursors: cursors,
-		logger:  logger,
+		logger:  log,
 		cfg:     cfg,
 	}
 }

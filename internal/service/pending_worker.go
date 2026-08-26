@@ -56,12 +56,12 @@ type PendingWorker struct {
 	cfg    PendingWorkerConfig
 }
 
-func NewPendingWorker(pdb PendingStore, data DataRepo, keys KeysRepo, logger logger.Logger, cfg PendingWorkerConfig) *PendingWorker {
+func NewPendingWorker(pdb PendingStore, data DataRepo, keys KeysRepo, log logger.Logger, cfg PendingWorkerConfig) *PendingWorker {
 	return &PendingWorker{
 		pdb:    pdb,
 		data:   data,
 		keys:   keys,
-		logger: logger,
+		logger: log,
 		cfg:    cfg,
 	}
 }

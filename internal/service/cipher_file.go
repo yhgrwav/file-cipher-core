@@ -32,10 +32,10 @@ type Cipher struct {
 	cfg     CipherConfig
 }
 
-func NewCipher(flusher *Flusher, logger logger.Logger, cfg CipherConfig) *Cipher {
+func NewCipher(flusher *Flusher, log logger.Logger, cfg CipherConfig) *Cipher {
 	return &Cipher{
 		flusher: flusher,
-		logger:  logger,
+		logger:  log,
 		cfg:     cfg,
 	}
 }

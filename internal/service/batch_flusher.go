@@ -40,10 +40,10 @@ type Flusher struct {
 	cfg         FlusherConfig
 }
 
-func NewFlusher(pendingRepo PendingWriter, logger logger.Logger, cfg FlusherConfig) *Flusher {
+func NewFlusher(pendingRepo PendingWriter, log logger.Logger, cfg FlusherConfig) *Flusher {
 	return &Flusher{
 		pendingRepo: pendingRepo,
-		logger:      logger,
+		logger:      log,
 		cfg:         cfg,
 	}
 }

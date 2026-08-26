@@ -29,12 +29,12 @@ type CipherHandler struct {
 	logger   logger.Logger
 }
 
-func NewCipherHandler(cipher Cipher, rotator Rotator, decipher Decipher, logger logger.Logger) *CipherHandler {
+func NewCipherHandler(cipher Cipher, rotator Rotator, decipher Decipher, log logger.Logger) *CipherHandler {
 	return &CipherHandler{
 		cipher:   cipher,
 		rotator:  rotator,
 		decipher: decipher,
-		logger:   logger,
+		logger:   log,
 	}
 }
 
