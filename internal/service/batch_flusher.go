@@ -34,6 +34,10 @@ type FlusherConfig struct {
 // Flusher решает проблему записи данных в базу, базовый паттерн, задаётся BatchSize и FlushTime -> если батч переполнился -
 // принудительно опустошается, отгружая все данные в БД, если поток данных маленький, но всё же есть - срабатывает FlushTime,
 // который по определённому кулдауну вызывает flush. в зависимости передаётся оба репозитория и логгер, ничего необычного
+type flusher interface {
+	Run(ctx context.Context, in <-chan entity.FlushItem) error
+}
+
 type Flusher struct {
 	pendingRepo PendingWriter
 	logger      logger.Logger

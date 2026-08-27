@@ -27,12 +27,12 @@ type CipherConfig struct {
 }
 
 type Cipher struct {
-	flusher *Flusher
+	flusher flusher
 	logger  logger.Logger
 	cfg     CipherConfig
 }
 
-func NewCipher(flusher *Flusher, log logger.Logger, cfg CipherConfig) *Cipher {
+func NewCipher(flusher flusher, log logger.Logger, cfg CipherConfig) *Cipher {
 	return &Cipher{
 		flusher: flusher,
 		logger:  log,
