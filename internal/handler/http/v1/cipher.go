@@ -1,11 +1,15 @@
 package v1
 
 import (
-	"fmt"
+	"encoding/json"
 	"net/http"
 
 	"github.com/google/uuid"
 )
+
+type encryptResponse struct {
+	FileID string `json:"file_id"`
+}
 
 func (h *CipherHandler) Encrypt(w http.ResponseWriter, r *http.Request) {
 	fileID, err := uuid.NewV7()
@@ -14,7 +18,6 @@ func (h *CipherHandler) Encrypt(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	defer r.Body.Close()
 
 	if err := h.cipher.EncryptFile(r.Context(), fileID, r.Body); err != nil {
 		h.logger.Error("encrypt failed", "file_id", fileID.String(), "error", err)
@@ -24,5 +27,7 @@ func (h *CipherHandler) Encrypt(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	fmt.Fprintf(w, `{"file_id":%q}`, fileID.String())
+	if err := json.NewEncoder(w).Encode(encryptResponse{FileID: fileID.String()}); err != nil {
+		h.logger.Error("write response failed", "file_id", fileID.String(), "error", err)
+	}
 }
