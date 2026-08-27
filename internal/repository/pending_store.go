@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"errors"
-	"file-cipher-core/internal/config"
 	"file-cipher-core/internal/entity"
 	"file-cipher-core/pkg/logger"
 	"fmt"
@@ -35,7 +34,13 @@ type PendingStore struct {
 	consumer    string
 }
 
-func NewPendingStore(rdb *redis.Client, log logger.Logger, cfg config.Redis) (*PendingStore, error) {
+type PendingStoreConfig struct {
+	Queue      string
+	CursorName string
+	ReadBlock  time.Duration
+}
+
+func NewPendingStore(rdb *redis.Client, log logger.Logger, cfg PendingStoreConfig) (*PendingStore, error) {
 	// каждый инстанс приложения имеет уникальный Hostname
 	host, err := os.Hostname()
 	if err != nil {

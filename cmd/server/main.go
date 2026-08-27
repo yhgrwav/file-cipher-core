@@ -66,7 +66,13 @@ func main() {
 	}()
 	cursors := repository.NewCursorStore(rdb, cfg.Redis.CursorTTL)
 
-	pendingStore, err := repository.NewPendingStore(rdb, logger, cfg.Redis)
+	pendingCfg := repository.PendingStoreConfig{
+		Queue:      cfg.Redis.Queue,
+		CursorName: cfg.Redis.CursorName,
+		ReadBlock:  cfg.Redis.ReadBlock,
+	}
+
+	pendingStore, err := repository.NewPendingStore(rdb, logger, pendingCfg)
 	if err != nil {
 		logger.Fatal("init pending store", "error", err)
 	}
